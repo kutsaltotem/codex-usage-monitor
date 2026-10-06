@@ -31,6 +31,37 @@ public sealed class QuotaSnapshotStore
         catch (UnauthorizedAccessException) { return null; }
     }
 
+    public async Task<IReadOnlyList<QuotaHistoryEntry>> LoadHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        var rows = new Dictionary<(string Provider, DateTimeOffset Hour), QuotaHistoryEntry>();
+        try
+        {
+            await using var stream = new FileStream(_historyPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 16384, true);
+            // Read a bounded recent tail; skip to a complete top-level record when a long archive exists.
+            if (stream.Length > 8 * 1024 * 1024)
+            {
+                stream.Seek(-8 * 1024 * 1024, SeekOrigin.End);
+                var lineStart = false;
+                int value;
+                while ((value = stream.ReadByte()) >= 0)
+                {
+                    if (lineStart && value == '{') { stream.Seek(-1, SeekOrigin.Current); break; }
+                    lineStart = value == '\n';
+                }
+            }
+            await foreach (var entry in JsonSerializer.DeserializeAsyncEnumerable<QuotaHistoryEntry>(stream,
+                topLevelValues: true, options: _json, cancellationToken: cancellationToken))
+            {
+                if (entry is null || entry.GeneratedAt < DateTimeOffset.UtcNow.AddDays(-1)) continue;
+                var hour = new DateTimeOffset(entry.GeneratedAt.Year, entry.GeneratedAt.Month, entry.GeneratedAt.Day,
+                    entry.GeneratedAt.Hour, 0, 0, entry.GeneratedAt.Offset);
+                rows[(entry.Id, hour)] = entry;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        return rows.Values.OrderBy(row => row.GeneratedAt).ToArray();
+    }
+
     public async Task SaveAsync(UsageSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_snapshotPath)!);
@@ -63,7 +94,7 @@ public sealed class QuotaSnapshotStore
                     provider.Plan,
                     provider.Source,
                     provider.Windows
-                }, _json);
+                }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
                 var bytes = System.Text.Encoding.UTF8.GetBytes(line + "\n");
                 await history.WriteAsync(bytes, cancellationToken);
             }
@@ -121,3 +152,5 @@ public sealed class QuotaSnapshotStore
         }
     }
 }
+
+public sealed record QuotaHistoryEntry(DateTimeOffset GeneratedAt, string Id, IReadOnlyList<UsageWindow> Windows);

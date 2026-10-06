@@ -1,59 +1,64 @@
-# Windows Codex, Gemini ve Claude Kullanım Monitörü
+# Süper Zeka Kullanımı · AI Usage Bar
 
-ChatGPT/Codex, Gemini ve Claude Code kullanım durumunu Windows görev çubuğunda kompakt, ayrıntıları açılır panelde gösteren uygulama.
+**Codex, Gemini ve Claude kotanı tek bakışta gör. Akışını bölmeden çalışmaya devam et.**
 
-## Proje durumu
+[Windows x64 indir](https://github.com/kutsaltotem/codex-usage-monitor/releases/latest) · [Kurulum rehberi](docs/INSTALL.md) · [English](README.en.md) · [Sorun bildir](https://github.com/kutsaltotem/codex-usage-monitor/issues)
 
-Depoda .NET kota toplama çekirdeği, WPF/WinForms tepsi uygulaması ve ayrı opt-in yerel token geçmişi görünümü var. Windows uygulamasını paketlemek için `scripts/publish-windows.ps1` eklendi; gerçek Windows derlemesi, gerçek uygulama oturumlarıyla uçtan uca doğrulama ve imzalı kurulum paketi henüz yapılmadı. Ekran görüntüleri tarayıcı prototipidir; sayaçlar örnektir, gerçek hesaptan alınmamıştır.
+![Windows görev çubuğu göstergesi](docs/images/taskbar.png)
 
-## Önizleme
+Görev çubuğunun içinde, sistem tepsisinin yanında üç küçük gösterge. Bir tıkla kalan kotayı ve sıfırlanma zamanını gör; geçmişte kullanım eğilimini izle. Ayrı bir pencereyi sürekli açık tutman gerekmez.
 
-`usage-monitor-mockup.png` Kullanım sekmesinin, `usage-monitor-limits.png` kota sekmesinin ekran görüntüsüdür. `usage-monitor-mockup.html` dosyasını tarayıcıda açarak sekmeler, dönem/sağlayıcı filtreleri ve grafik ayrıntılarıyla etkileşebilirsiniz. Ekrandaki bütün kullanım ve kota değerleri kurgusaldır; bu konsept herhangi bir günlük, kimlik bilgisi veya ağa erişmez. HTML dosyası logoları `assets/` klasöründen yükler; görüntüleri taşırken bu klasörü de birlikte tutun.
+<table><tr><td><img src="docs/images/quota.png" width="350" alt="Kota paneli" /></td><td><img src="docs/images/history.png" width="350" alt="Geçmiş ve çizgi grafiği" /></td></tr></table>
 
-Görev çubuğu fikrinde her sağlayıcının logosu, sıfırlanmaya kalan süre ve kalan yüzde kapsülleri gösterilir. Açılır panelde mevcut kota çubukları “Kota limitleri” sekmesinde korunur. “Token kullanımı” sekmesinde yerel günlüklerden tarih/model sayaçları, dönem/sağlayıcı filtreleri ve token grafiği bulunur. HTML prototipindeki örnek sayaçlar ve örnek fiyat eşdeğeri gerçek ölçüm değildir; Windows uygulamasında doğrulanmış fiyat listesi olmadığı için maliyet tahmini gösterilmez.
+> Görseller güncel Windows uygulamasından üretilmiştir. Tüm sayaçlar **örnek veridir**; gerçek kişisel hesap veya ücretli Claude bağlantısı kanıtı değildir.
 
-## İçerik
+## Bir bakışta, ihtiyacın kadar bilgi
 
-- `PRODUCT-PLAN-20261005.md` — pazar örnekleri, veri kaynakları, Windows tasarımı, güvenlik kararları ve yol haritası.
-- `usage-monitor-mockup.html` — örnek verilerle çalışan etkileşimli tarayıcı konsepti.
-- `usage-monitor-mockup.png` ve `usage-monitor-limits.png` — Token kullanımı ve Kota limitleri sekmelerinin ekran görüntüleri.
-- `assets/` — kullanıcı tarafından sağlanan sağlayıcı logo görselleri ve eşleştirme notları.
+- **Görev çubuğuna yerleşir.** Şeffaf dış zemin, ortalı logolar ve okunaklı yüzde kapsülleri; ayrı görev çubuğu düğmesi oluşturmaz.
+- **Tek tıkla ayrıntı.** 560 DIP yüksekliğinde panel göstergeye boşluksuz bağlanır; tekrar tıklayınca veya başka uygulamaya geçince kapanır.
+- **Ne kadar güncel olduğunu söyler.** “1 dakika önce” etiketi son başarılı ölçüme dayanır. Bağlantı kesilirse son veri korunur, eski olduğu belirtilir.
+- **Kota eğilimini gösterir.** Son 24 saatin saatlik ölçümleri çizgi grafiği olarak görünür. Tümü, Codex, Gemini ve Claude ayrı seçilebilir.
+- **İsteğe bağlı token geçmişi.** CLI günlüklerinden günlük/model özetleri; dönem ve sağlayıcı filtreleri, üstte sabit toplam/girdi/çıktı kartları. Model dökümü gerektiğinde açılır.
+- **Sade hata açıklaması.** Marka yanındaki kırmızı ünlemden neden ve çözüm önerisi okunur; genel hata kutuları ekranı doldurmaz.
+- **Sürekli tarama yapmaz.** Kota 2 dakikada bir yenilenir. Paneli açmak yeni kota isteği başlatmaz; token toplama kapalıysa zamanlayıcısı çalışmaz.
+- **Kontrol sende.** Başlangıçta açılma, düşük kota bildirimleri ve token saklama süresi tepsi/panel üzerinden seçilir.
 
-## Veri toplama çekirdeği
+## İndir, kur, bağlan
 
-`windows-app/` altındaki .NET kütüphanesi Codex uygulamasının yerel oturumundan, Google Antigravity'nin Windows oturumundan ve istenirse Claude Code oturumundan kota eşitler; CLI kurmak gerekmez. Beş dakikalık yenileme ve son iyi snapshot önbelleği sağlar. Claude kota pencereleri Claude Code'un Windows'ta sakladığı OAuth oturumuyla Anthropic'in belgelenmemiş `/api/oauth/usage` uç noktasından alınır. Token yenileme veya oturum dosyalarına yazma yapılmaz. Kota snapshot geçmişi 365 gün yerel JSONL kaydıdır. Ayrı ve isteğe bağlı token geçmişi ise Codex CLI, Gemini CLI ve Claude Code günlüklerinden tarih/model/token sayaçları çıkarır; bu günlükleri kullanmıyorsan bu özelliği açman gerekmez. Saklama süresi 30, 90 veya 365 gün seçilebilir. Ham konuşma metni, dosya yolu veya oturum kimliği saklanmaz. Windows derlemesi ve gerçek hesaplarla uçtan uca doğrulama henüz yapılmadı.
+1. [Son sürümden](https://github.com/kutsaltotem/codex-usage-monitor/releases/latest) **CodexUsageMonitor-win-x64.zip** paketini indir ve tamamını bir klasöre çıkar.
+2. **Install.cmd** dosyasını çalıştır. Yönetici yetkisi istemeden kullanıcı klasörüne kurar, Başlat menüsüne kısayol ekler ve uygulamayı açar. İstersen kurmadan klasördeki **CodexUsageMonitor.exe** ile taşınabilir kullan.
+3. Codex veya Antigravity uygulamasında hesabına giriş yap. Gösterge sistem tepsisinin soluna yerleşir; ayrıntılar için tıkla.
+4. İstersen tepsi menüsünden **Windows oturumunda başlat** seçeneğini aç. Token sayaçları istiyorsan Geçmiş bölümünün en altındaki kaynakları etkinleştir.
 
-Claude kota bağlantısı, kullanıcının Claude Code ile açtığı abonelik oturumunu ve toplulukça belgelenmiş, ancak Anthropic tarafından kararlı API olarak sunulmayan OAuth kullanım yolunu kullanır. Claude Code oturum JSONL biçimi de iç kullanıma yöneliktir. Bu nedenle Claude kota veya token satırları alınamazsa değer tahmini yapılmaz; kaynak/kapsam uyarısı görünür.
+.NET çalışma zamanı pakete dahildir; indirilen sürümü çalıştırmak için SDK veya geliştirici API anahtarı gerekmez. Windows 11 x64 üzerinde doğrulanmıştır. Bu ilk herkese açık **önizleme sürümüdür**; ARM64, farklı DPI düzenleri, otomatik gizlenen görev çubuğu ve Explorer yeniden başlatma davranışı kapsamlı doğrulanmamıştır. Paket dijital olarak imzalı değildir; Windows uyarı gösterebilir. [Kurulum ve sorun giderme](docs/INSTALL.md).
 
-ChatGPT verisi Codex kullanım pencereleridir; tüm ChatGPT sohbetlerinin toplamı değildir. Gemini yalnızca sağlayıcının yanıtında bulunan kota/model kovalarını verir. Claude için 5 saatlik ve haftalık abonelik yüzdeleri gösterilir; model kapsamlı ek haftalık pencereler yanıtta geldikçe eklenir. Bu kota uç noktası Anthropic tarafından belgelenmediği için değişebilir. Claude token geçmişi yalnız Claude Code yerel oturumlarını kapsar; Claude.ai web ve masaüstü sohbetleri dahil değildir. Erişim tokenı önbelleğe/loga yazılmaz ve uygulama token yenilemez: oturum süresi dolunca ilgili CLI'da yeniden giriş gerekir. Ayrıntılı bağlantı kararı ve kısıtları [`PRODUCT-PLAN-20261005.md`](PRODUCT-PLAN-20261005.md) içindedir.
+## Hangi veriyi gösteriyor?
 
-## Veri kapsamı
+| Kaynak | Kota bağlantısı | Token geçmişi |
+|---|---|---|
+| Codex | Windows Codex uygulamasının geçerli yerel oturumu; Codex kullanım pencereleri | İsteğe bağlı Codex CLI kayıtları |
+| Gemini / Antigravity | Açık ve girişli Antigravity'nin yerel kota servisi; gerektiğinde mevcut Gemini OAuth yolu | İsteğe bağlı Gemini CLI kayıtları |
+| Claude | Claude Code'un yerel abonelik OAuth oturumu | İsteğe bağlı Claude Code kayıtları |
 
-Kota yüzdesi/reset verisi Codex ve Antigravity uygulamalarının yerel oturumlarından gelen kota yanıtlarıyla elde edilir; token geçmişi ise ayrı CLI oturum günlüklerinden gelir. ChatGPT/Codex bağlantısı Codex kullanım pencerelerini gösterir, tüm ChatGPT sohbetlerini saymaz. Antigravity için yerel token günlükleri kapsam dışıdır. Claude token geçmişi Claude Code JSONL oturumlarına dayanır ve Claude.ai web/masaüstü sohbetlerini içermez. Token geçmişi varsayılan kapalıdır, sağlayıcı başına açılabilir, durdurulabilir ve yerel özet dosyaları silinebilir.
+**Claude Desktop'a giriş yapmak tek başına yeterli değildir.** Ücretsiz Desktop hesabının kotası bu sürümde bağlanmaz. Ücretli Claude bağlantı yöntemi kodda bulunur; bu sürümün gerçek hesap doğrulaması Codex ve Antigravity ile yapılmıştır. Hesap oturumunu uygulama yenilemez; süre dolunca sağlayıcıda yeniden giriş gerekir.
 
-## Windows paketini oluşturma
+Gösterge **kalan yüzdeyi**, kota geçmişi ise **kullanılan 5 saatlik yüzdeyi** (bu pencere yoksa haftalık yüzdeyi) gösterir. “Son 24 saat”, ölçümlerin zaman aralığıdır; o gün tüketilen toplam kota değildir. Antigravity'nin ayrı Claude/GPT grubu, Claude Code aboneliğiyle karıştırılmaz; Gemini çizgisinin dışında tutulur. Token sayısı abonelik yüzdesi veya fatura tutarı değildir. Web/Desktop sohbetlerinin tamamı token geçmişine dahil değildir.
 
-Windows makinesinde .NET 10 SDK kuruluysa proje kökünde PowerShell açıp çalıştırın:
+## Yerel veriler ve kaynak kullanımı
+
+Kota ve token özetleri `%LOCALAPPDATA%\CodexUsageMonitor` altında tutulur. Token toplama varsayılan kapalıdır; 30/90/365 gün seçilebilir. Saklanan özetler konuşma metni içermez. Uygulama kişisel istatistikleri bir izleme sunucusuna yüklemez; kota okumak için sağlayıcının servisine mevcut oturumuyla istek gönderir. Oturum anahtarları uygulamanın geçmiş dosyalarına yazılmaz.
+
+WPF tabanlı uygulama sıfır bellek maliyetine sahip değildir. Yerel kısa ölçümlerde yaklaşık 160–195 MiB çalışma kümesi görüldü; bunlar kontrollü benchmark değildir ve bilgisayara göre değişir. Panel gerektiğinde oluşturulur, gizlenince görsel öğeleri bırakılır. Yazılım çizimi bellek/CPU arasında bir tercihtir.
+
+## Geliştirme
+
+Windows ve .NET 10 SDK ile:
 
 ```powershell
+dotnet run --project windows-app/UsageMonitor.Windows/UsageMonitor.Windows.csproj
 .\scripts\publish-windows.ps1
 ```
 
-Script, kendi makinenizde `artifacts\CodexUsageMonitor-win-x64-<tarih>.zip` paketini üretir. Paketi açıp `CodexUsageMonitor.exe` dosyasını çalıştırabilirsiniz. GitHub'a gönderildiğinde `.github/workflows/windows-package.yml` de Windows x64 paketini her `main` push/PR derlemesinde 14 gün süreyle indirilebilir Actions artifact'i olarak sunar. Proje paylaşıma hazır imzalı bir kurulum paketi değildir.
+Paket `artifacts/` altında üretilir. Doğrulama ayrıntıları [Windows test raporunda](WINDOWS-VERIFICATION-20261006.md); görselleri yeniden üretme komutu [görsel notlarında](docs/images/README.md). HTML dosyaları eski, örnek verili tasarım prototipleridir; güncel ürünün yerine geçmez.
 
-## Kaynaktan çalıştırma
-
-1. Proje klasörünü Windows bilgisayarınıza alın ve .NET 10 SDK'yı kurun.
-2. Windows Codex uygulamasında ChatGPT hesabınızla, Antigravity uygulamasında Google hesabınızla oturum açın. Bu kota bağlantıları için CLI kurmanız gerekmez. Claude kullanıyorsanız Claude Code oturumunu da açın.
-3. `dotnet run --project windows-app/UsageMonitor.Windows/UsageMonitor.Windows.csproj` komutuyla uygulamayı başlatın.
-4. Varsayılan kompakt alt şerit AppBar olarak ekranın altına yerleşir ve çalışma alanından yükseklik ayırır; tepsi menüsünden kapatılabilir.
-5. Tepsi menüsündeki “Windows oturumunda başlat” seçeneğiyle otomatik açılışı isteğe bağlı etkinleştirin.
-6. “Düşük kota uyarıları” varsayılan olarak açıktır; aynı kota reset penceresi için %20 ve %10 eşiğinde birer uyarı verir. Tepsi menüsünden kapatılabilir.
-7. CLI günlüklerinden token geçmişi istiyorsanız Token kullanımı sekmesinde kaynak iznini açın. Codex/Antigravity uygulamalarını kullanmak kota göstergesi için yeterlidir; CLI token geçmişini açmak zorunlu değildir.
-8. Ürün ve kaynak kararları için `PRODUCT-PLAN-20261005.md` dosyasını okuyun.
-
-Bu çalışma ortamında .NET SDK/Windows bulunmadığı için derleme ve sağlayıcı hesabıyla gerçek bağlantı doğrulanmadı. `usage-monitor-mockup.html` hâlâ etkileşimli, örnek verili tasarım referansıdır.
-
-## Varlıklar
-
-Logo görselleri kullanıcı tarafından sağlandı. Dosya seçimi ve görsel eşleştirme notları için [`assets/README.md`](assets/README.md) dosyasına bakın.
+Bağımsız bir projedir; OpenAI, Google veya Anthropic tarafından üretilmez ya da onaylanmaz. Marka ve logolar ilgili sahiplerine aittir. Kota yolları sağlayıcıların kararlı herkese açık API sözleşmeleri değildir; değişebilir veya erişim reddedilebilir.

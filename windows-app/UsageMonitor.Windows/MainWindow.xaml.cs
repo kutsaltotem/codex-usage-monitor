@@ -14,6 +14,8 @@ public partial class MainWindow : Window
     private readonly TokenHistoryService _tokenHistoryService;
     private UsageSnapshot? _snapshot;
     private bool _refreshing;
+    private readonly List<(TextBlock Label, ProviderSnapshot Provider)> _ageLabels = new();
+    private readonly DispatcherTimer _ageClock = new() { Interval = TimeSpan.FromMinutes(1) };
 
     public bool AllowClose { get; set; }
 
@@ -26,39 +28,62 @@ public partial class MainWindow : Window
         CloseButton.Click += (_, _) => Hide();
         QuotaTabButton.Click += (_, _) => ShowQuotaTab();
         TokenTabButton.Click += (_, _) => ShowTokenTab();
-        Deactivated += (_, _) =>
-        {
-            if (!_showingConfirmation)
-                Dispatcher.BeginInvoke(new Action(Hide), DispatcherPriority.Background);
-        };
         Closing += (_, args) =>
         {
             if (AllowClose) return;
             args.Cancel = true;
             Hide();
         };
+        _ageClock.Tick += (_, _) =>
+        {
+            foreach (var (label, provider) in _ageLabels)
+                label.Text = (provider.State == "stale" ? "Eski · " : "") + FormatAge(provider.ObservedAt, DateTimeOffset.UtcNow);
+        };
+        SmoothScrolling.Attach(QuotaPanel);
+        SmoothScrolling.Attach(TokenPanel);
+        Deactivated += (_, _) =>
+        {
+            // Defer until the click target is known so the strip can still toggle closed.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (IsVisible && !IsActive && !TaskbarUsageWindow.IsIndicatorUnderPointer()) Hide();
+            }), DispatcherPriority.Background);
+        };
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible) { _ageClock.Stop(); _ageLabels.Clear(); ProviderList.Children.Clear(); TokenHistoryContent.Children.Clear(); TokenSummaryHost.Children.Clear(); }
+            else _ageClock.Start();
+        };
         SetLoadingMessage("Henüz kota verisi yok.");
     }
 
-    public void ShowNear(System.Drawing.Rectangle workingArea)
+    public void ShowAttached(System.Drawing.Rectangle anchor)
     {
         if (!IsVisible)
         {
             Opacity = 0;
             Show();
+            if (_snapshot is not null) SetSnapshot(_snapshot, isCached: false);
+            if (TokenPanel.Visibility == Visibility.Visible) RenderTokenHistory();
             UpdateLayout();
-            var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-            Left = workingArea.Right / scale - ActualWidth - 12;
-            Top = workingArea.Bottom / scale - ActualHeight - 12;
+            AlignTo(anchor);
             Opacity = 1;
             Activate();
         }
         else
         {
+            AlignTo(anchor);
             Activate();
         }
-        _ = RefreshAsync(quiet: true);
-        _ = RefreshTokenHistoryAsync();
+    }
+
+    public void AlignTo(System.Drawing.Rectangle anchor)
+    {
+        if (!IsVisible || anchor.Width <= 0) return;
+        var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        Width = anchor.Width / scale;
+        Left = anchor.Left / scale;
+        Top = anchor.Top / scale - ActualHeight;
     }
 
     public void SetSnapshot(UsageSnapshot snapshot, bool isCached)
@@ -80,14 +105,16 @@ public partial class MainWindow : Window
                 ? $"Bazı kota verileri alınamadı · {errorCount} sağlayıcı"
                 : partialCount > 0
                     ? "Bazı kota pencereleri yanıt içinde yok"
-                    : isCached ? "Kaydedilmiş son veri" : "Kota bilgileri güncel";
+                    : isCached ? "Kaydedilmiş son veri" : "Son okuma tamamlandı";
         if (storageWarning) SyncStatusText.Text += " · yerel geçmiş yazılamadı";
         SyncStatusText.Foreground = staleCount > 0 || errorCount > 0 || partialCount > 0 || storageWarning
             ? Brush("#F1C46C")
             : Brush("#B7C8D9");
-        UpdatedAtText.Text = $"Son eşitleme: {snapshot.GeneratedAt.ToLocalTime():dd MMM, HH:mm}";
 
+
+        if (!IsVisible) return;
         ProviderList.Children.Clear();
+        _ageLabels.Clear();
         foreach (var provider in snapshot.Providers.OrderBy(ProviderOrder))
             ProviderList.Children.Add(CreateProviderCard(provider));
     }
@@ -101,7 +128,7 @@ public partial class MainWindow : Window
         }
         if (_snapshot is not null) return;
         SyncStatusText.Text = message;
-        UpdatedAtText.Text = "Codex, Gemini ve Claude oturumu aranıyor";
+
         ProviderList.Children.Clear();
         ProviderList.Children.Add(CreateEmptyState("İlk eşitleme tamamlanınca kota pencereleri burada görünecek."));
     }
@@ -150,29 +177,32 @@ public partial class MainWindow : Window
             BorderBrush = Brush("#394452"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(12),
+            Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 10)
         };
         var layout = new StackPanel();
         card.Child = layout;
 
-        var header = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        var header = new Grid { Margin = new Thickness(0, 0, 0, 6) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.Children.Add(CreateLogo(provider.Id, 28));
+        header.Children.Add(CreateLogo(provider.Id, 14));
         var name = new TextBlock
         {
-            Text = provider.Name,
+            Text = provider.Id == "gemini" ? "Gemini" : provider.Id == "chatgpt-codex" ? "Codex" : provider.Name,
             Foreground = Brush("#EDF1F6"),
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(9, 0, 0, 0)
         };
-        Grid.SetColumn(name, 1);
-        header.Children.Add(name);
-        var badge = CreateStateBadge(provider.State);
+        var brand = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        brand.Children.Add(name);
+        if (provider.State != "ok") brand.Children.Add(CreateProviderWarning(provider));
+        Grid.SetColumn(brand, 1);
+        header.Children.Add(brand);
+        var badge = CreateStateBadge(provider);
         Grid.SetColumn(badge, 2);
         header.Children.Add(badge);
         layout.Children.Add(header);
@@ -189,7 +219,7 @@ public partial class MainWindow : Window
             };
             empty.Child = new TextBlock
             {
-                Text = provider.Message ?? StateDescription(provider.State),
+                Text = "Kota verisi yok",
                 Foreground = Brush(provider.State is "stale" or "partial" ? "#E7C579" : "#AFBAC8"),
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11
@@ -200,21 +230,12 @@ public partial class MainWindow : Window
         {
             var windowsPanel = new UniformGrid
             {
-                Columns = provider.Windows.Count == 2 ? 2 : 1,
-                Rows = (int)Math.Ceiling(provider.Windows.Count / (double)(provider.Windows.Count == 2 ? 2 : 1))
+                Columns = provider.Windows.Count >= 2 ? 2 : 1,
+                Rows = (int)Math.Ceiling(provider.Windows.Count / (double)(provider.Windows.Count >= 2 ? 2 : 1))
             };
             foreach (var window in provider.Windows)
-                windowsPanel.Children.Add(CreateQuotaWindow(window, accent, provider.Windows.Count == 2));
+                windowsPanel.Children.Add(CreateQuotaWindow(window, accent, provider.Windows.Count >= 2));
             layout.Children.Add(windowsPanel);
-            if (!string.IsNullOrWhiteSpace(provider.Message))
-                layout.Children.Add(new TextBlock
-                {
-                    Text = provider.Message,
-                    Foreground = Brush("#E7C579"),
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 10,
-                    Margin = new Thickness(1, 8, 1, 0)
-                });
         }
 
         var source = new TextBlock
@@ -228,8 +249,53 @@ public partial class MainWindow : Window
                 ? "Claude kotası, Claude Code'un yerel abonelik oturumu ve Anthropic'in belgelenmemiş kullanım uç noktasıyla okunur."
                 : FriendlySource(provider.Source)
         };
-        layout.Children.Add(source);
+        card.ToolTip = source.Text;
         return card;
+    }
+
+    private UIElement CreateProviderWarning(ProviderSnapshot provider)
+    {
+        var details = ProviderWarningDetails(provider);
+        var button = new System.Windows.Controls.Button
+        {
+            Content = "!", Foreground = Brush("#FF8585"), FontWeight = FontWeights.Bold, FontSize = 12,
+            Width = 22, Height = 24, Padding = new Thickness(0), Margin = new Thickness(3,0,0,0),
+            Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+            Style = (Style)Application.Current.FindResource("ActionButton"), ToolTip = details,
+            Tag = "ProviderWarning"
+        };
+        ToolTipService.SetInitialShowDelay(button, 100);
+        var popup = new Popup
+        {
+            PlacementTarget = button, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true,
+            Child = new Border
+            {
+                Background = Brush("#202731"), BorderBrush = Brush("#465363"), BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(9), Padding = new Thickness(10), MaxWidth = 280,
+                Child = new TextBlock { Text = details, Foreground = Brush("#E5EBF2"), FontSize = 10, TextWrapping = TextWrapping.Wrap }
+            }
+        };
+        button.Click += (_,_) => popup.IsOpen = !popup.IsOpen;
+        button.Unloaded += (_,_) => popup.IsOpen = false;
+        return button;
+    }
+
+    public static string ProviderWarningDetails(ProviderSnapshot provider)
+    {
+        var action = provider.State switch
+        {
+            "not_signed_in" or "reauth_required" => provider.Id == "claude"
+                ? "Claude Desktop girişi bu bağlantı için yeterli olmayabilir. Claude Code abonelik oturumu gerekir; ücretsiz hesabın kotası bu bağlantıyla okunamayabilir."
+                : "Sağlayıcı uygulamasında girişini kontrol et; ardından yenile.",
+            "forbidden" => "Hesabın planını ve kota erişimini kontrol et. Servis erişim izni vermedi.",
+            "rate_limited" => "İstek sınırı nedeniyle bekle; sonraki otomatik ölçüm yeniden dener.",
+            "stale" => "Son başarılı ölçüm korunuyor. Bağlantını ve sağlayıcı oturumunu kontrol et.",
+            "partial" => "Servis bazı kota pencerelerini döndürmedi. Mevcut ölçümler gösteriliyor.",
+            _ => "Bağlantını kontrol et; yenileme düğmesiyle tekrar dene."
+        };
+        var reason = provider.Message ?? StateDescription(provider.State);
+        return $"{provider.Name}\n{reason}\n\n{action}\n\nDurum: {provider.ErrorCode ?? provider.State}\nKaynak: {FriendlySource(provider.Source)}" +
+            (provider.ObservedAt == default ? "" : $"\nSon ölçüm: {provider.ObservedAt.ToLocalTime():dd MMM HH:mm}");
     }
 
     private UIElement CreateQuotaWindow(UsageWindow window, string accent, bool compact)
@@ -266,8 +332,7 @@ public partial class MainWindow : Window
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
-        Grid.SetColumn(reset, 1);
-        top.Children.Add(reset);
+
         panel.Children.Add(top);
 
         var remainingValue = window.RemainingPercent ?? (window.UsedPercent is { } used ? 100 - used : null);
@@ -301,28 +366,46 @@ public partial class MainWindow : Window
         track.Child = fill;
         track.SizeChanged += (_, _) => fill.Width = track.ActualWidth * remaining / 100;
         panel.Children.Add(track);
+        reset.Margin = new Thickness(0, 4, 0, 0);
+        reset.FontSize = 8;
+        panel.Children.Add(reset);
         return cell;
     }
 
-    private FrameworkElement CreateStateBadge(string state)
+    public static string FormatAge(DateTimeOffset observedAt, DateTimeOffset now)
     {
+        if (observedAt == default) return "Ölçüm yok";
+        var elapsed = now - observedAt;
+        if (elapsed.TotalMinutes < 1) return "Az önce";
+        if (elapsed.TotalHours < 1) return $"{(int)elapsed.TotalMinutes} dakika önce";
+        if (elapsed.TotalDays < 1) return $"{(int)elapsed.TotalHours} saat önce";
+        return $"{(int)elapsed.TotalDays} gün önce";
+    }
+
+    private FrameworkElement CreateStateBadge(ProviderSnapshot provider)
+    {
+        var state = provider.State;
+        var observedAt = provider.ObservedAt;
         var (text, foreground, background) = state switch
         {
-            "ok" => ("GÜNCEL", "#7ADDB8", "#203B35"),
-            "partial" => ("KISMİ", "#EBC66F", "#3E3422"),
-            "stale" => ("ÖNBELLEK", "#EBC66F", "#3E3422"),
+            "ok" => (FormatAge(observedAt, DateTimeOffset.UtcNow), "#7ADDB8", "#203B35"),
+            "partial" => (FormatAge(observedAt, DateTimeOffset.UtcNow), "#EBC66F", "#3E3422"),
+            "stale" => ("Eski · " + FormatAge(observedAt, DateTimeOffset.UtcNow), "#EBC66F", "#3E3422"),
             "reauth_required" => ("GİRİŞ GEREKLİ", "#F0B56B", "#403325"),
             "not_installed" or "not_signed_in" => ("BAĞLANTI YOK", "#B4BFCC", "#333C48"),
             "forbidden" => ("ERİŞİM YOK", "#EF9894", "#432D32"),
             _ => ("ERİŞİLEMİYOR", "#EF9894", "#432D32")
         };
+        var ageLabel = new TextBlock { Text = text, Foreground = Brush(foreground), FontSize = 8, FontWeight = FontWeights.SemiBold };
+        if (state is "ok" or "partial" or "stale") _ageLabels.Add((ageLabel, provider));
         return new Border
         {
+            ToolTip = $"Son başarılı ölçüm: {observedAt.ToLocalTime():dd MMM HH:mm:ss}",
             Background = Brush(background),
             CornerRadius = new CornerRadius(5),
             Padding = new Thickness(7, 4, 7, 4),
             VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = text, Foreground = Brush(foreground), FontSize = 8, FontWeight = FontWeights.Bold }
+            Child = ageLabel
         };
     }
 
@@ -361,15 +444,20 @@ public partial class MainWindow : Window
         return image;
     }
 
+    private static readonly Dictionary<string, BitmapImage> LogoCache = new();
+
     private static BitmapImage? LoadImage(string path)
     {
+        if (LogoCache.TryGetValue(path, out var cached)) return cached;
         if (!File.Exists(path)) return null;
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
+        bitmap.DecodePixelWidth = 64;
         bitmap.UriSource = new Uri(path, UriKind.Absolute);
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
         bitmap.EndInit();
         bitmap.Freeze();
+        LogoCache[path] = bitmap;
         return bitmap;
     }
 
@@ -397,6 +485,7 @@ public partial class MainWindow : Window
 
     private static string DisplayWindowLabel(UsageWindow window)
     {
+        if (window.Label.StartsWith("Gemini ·") || window.Kind.StartsWith("antigravity_")) return window.Label;
         if (window.Kind == "five_hour") return "5 saatlik";
         if (window.Kind == "weekly") return "Haftalık";
         if (window.Kind.StartsWith("weekly_", StringComparison.Ordinal)) return window.Label;

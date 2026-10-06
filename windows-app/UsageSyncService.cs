@@ -13,7 +13,7 @@ public sealed class UsageSyncService : IAsyncDisposable
     {
         _connectors = connectors;
         _store = store;
-        _interval = interval ?? TimeSpan.FromMinutes(5);
+        _interval = interval ?? TimeSpan.FromMinutes(2);
     }
 
     public event Action<UsageSnapshot>? SnapshotUpdated;
@@ -32,7 +32,14 @@ public sealed class UsageSyncService : IAsyncDisposable
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception)
                 {
-                    fresh = new ProviderSnapshot(connector.Id, connector.Id, "fetch_failed", null, DateTimeOffset.UtcNow,
+                    var name = connector.Id switch
+                    {
+                        "gemini" => "Gemini",
+                        "chatgpt-codex" => "ChatGPT / Codex",
+                        "claude" => "Claude",
+                        _ => connector.Id
+                    };
+                    fresh = new ProviderSnapshot(connector.Id, name, "fetch_failed", null, DateTimeOffset.UtcNow,
                         "none", Array.Empty<UsageWindow>(), "unexpected_error", "Beklenmeyen sağlayıcı hatası.");
                 }
                 return MergeWithPrevious(fresh, previousById.GetValueOrDefault(connector.Id));

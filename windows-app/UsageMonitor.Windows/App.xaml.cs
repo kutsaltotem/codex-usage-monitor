@@ -13,28 +13,52 @@ public partial class App : System.Windows.Application
     private TokenHistoryService? _tokenHistoryService;
     private readonly LowQuotaNotificationPolicy _notificationPolicy = new();
     private MainWindow? _popup;
-    private AppBarStripWindow? _appBar;
+    private UsageSnapshot? _latestSnapshot;
+    private TokenHistorySnapshot? _latestTokenSnapshot;
+    private TaskbarUsageWindow? _appBar;
     private Forms.NotifyIcon? _trayIcon;
     private Icon? _trayBitmapIcon;
     private Forms.ToolStripMenuItem? _appBarMenuItem;
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
+    private EventWaitHandle? _showRequested;
+    private RegisteredWaitHandle? _showWait;
     private readonly List<HttpClient> _httpClients = new();
     private bool _isShuttingDown;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         base.OnStartup(e);
+        if (e.Args.Contains("--tray-geometry"))
+        {
+            Console.Write(TaskbarGeometryProbe.Read());
+            Shutdown();
+            return;
+        }
 
         _singleInstanceMutex = new Mutex(true, @"Local\CodexUsageMonitor", out var createdNew);
         if (!createdNew)
         {
+            try
+            {
+                using var request = EventWaitHandle.OpenExisting(@"Local\CodexUsageMonitor.Show");
+                request.Set();
+            }
+            catch (WaitHandleCannotBeOpenedException) { }
             _singleInstanceMutex.Dispose();
             _singleInstanceMutex = null;
             Shutdown();
             return;
         }
         _ownsSingleInstanceMutex = true;
+        _showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\CodexUsageMonitor.Show");
+        _showWait = ThreadPool.RegisterWaitForSingleObject(_showRequested,
+            (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _appBar?.Enable();
+                ShowPopup();
+            })), null, Timeout.Infinite, false);
 
         var store = new QuotaSnapshotStore();
         var codexHttp = QuotaHttpClient.Create();
@@ -51,20 +75,25 @@ public partial class App : System.Windows.Application
         ], store);
         _tokenHistoryService = new TokenHistoryService();
 
-        _popup = new MainWindow(_syncService, _tokenHistoryService);
-        _appBar = new AppBarStripWindow();
+        _appBar = new TaskbarUsageWindow();
+        _appBar.OpenRequested += TogglePopup;
+        _appBar.PlacementChanged += anchor =>
+        {
+            if (_popup?.IsVisible == true) _popup.AlignTo(anchor);
+        };
         _syncService.SnapshotUpdated += OnSnapshotUpdated;
         _tokenHistoryService.SnapshotUpdated += OnTokenHistoryUpdated;
         try { await _notificationPolicy.InitializeAsync(); }
         catch (Exception) { }
         InitializeTrayIcon();
+        if (_appBarMenuItem is not null) _appBarMenuItem.Checked = true;
 
         try
         {
             var cached = await store.LoadLatestAsync();
             if (cached is not null)
             {
-                _popup.SetSnapshot(cached, isCached: true);
+                _latestSnapshot = cached;
                 _appBar.SetSnapshot(cached);
             }
         }
@@ -180,7 +209,7 @@ public partial class App : System.Windows.Application
         menu.Items.Add(notificationItem);
 
         menu.Items.Add(new Forms.ToolStripSeparator());
-        _appBarMenuItem = new Forms.ToolStripMenuItem("Kompakt alt şerit · ekran alanı ayırır") { CheckOnClick = true };
+        _appBarMenuItem = new Forms.ToolStripMenuItem("Görev çubuğunda kullanım göstergesi") { CheckOnClick = true };
         _appBarMenuItem.CheckedChanged += (_, _) => ToggleAppBar(_appBarMenuItem.Checked);
         menu.Items.Add(_appBarMenuItem);
 
@@ -206,46 +235,34 @@ public partial class App : System.Windows.Application
 
     private static Icon? CreateTrayIcon()
     {
-        var imagePath = Path.Combine(AppContext.BaseDirectory, "Assets", "openai-mark-codex.jpg");
-        if (!File.Exists(imagePath)) return null;
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "usage-monitor.ico");
+        try { return File.Exists(path) ? new Icon(path) : null; }
+        catch (Exception) { return null; }
+    }
 
-        IntPtr nativeHandle = IntPtr.Zero;
-        try
-        {
-            using var source = new Bitmap(imagePath);
-            using var bitmap = new Bitmap(32, 32);
-            using (var graphics = Graphics.FromImage(bitmap))
-            {
-                graphics.Clear(Color.White);
-                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                graphics.DrawImage(source, new Rectangle(1, 1, 30, 30));
-            }
-            nativeHandle = bitmap.GetHicon();
-            using var nativeIcon = Icon.FromHandle(nativeHandle);
-            using var clone = (Icon)nativeIcon.Clone();
-            using var stream = new MemoryStream();
-            clone.Save(stream);
-            stream.Position = 0;
-            using var detached = new Icon(stream);
-            return (Icon)detached.Clone();
-        }
-        catch
-        {
-            return null;
-        }
-        finally
-        {
-            if (nativeHandle != IntPtr.Zero)
-                DestroyIcon(nativeHandle);
-        }
+    private void TogglePopup()
+    {
+        if (_popup?.IsVisible == true) _popup.Hide();
+        else ShowPopup();
     }
 
     private void ShowPopup()
     {
-        if (_popup is null) return;
-        var cursor = Forms.Cursor.Position;
-        var screen = Forms.Screen.FromPoint(cursor);
-        _popup.ShowNear(screen.WorkingArea);
+        if (_appBar is null || _syncService is null || _tokenHistoryService is null) return;
+        if (_popup is null)
+        {
+            _popup = new MainWindow(_syncService, _tokenHistoryService);
+            if (_latestSnapshot is not null) _popup.SetSnapshot(_latestSnapshot, isCached: true);
+            if (_latestTokenSnapshot is not null) _popup.SetTokenHistorySnapshot(_latestTokenSnapshot);
+            _popup.IsVisibleChanged += (_, _) =>
+            {
+                if (_popup?.IsVisible == false) _appBar?.SetAttached(false);
+            };
+        }
+        _appBar.Enable();
+        _appBar.SetAttached(true);
+        if (_appBar.ScreenBounds.Width > 0)
+            _popup.ShowAttached(_appBar.ScreenBounds);
     }
 
     private async Task RefreshFromTrayAsync()
@@ -269,6 +286,7 @@ public partial class App : System.Windows.Application
     {
         Dispatcher.InvokeAsync(() =>
         {
+            _latestSnapshot = snapshot;
             _popup?.SetSnapshot(snapshot, isCached: false);
             _appBar?.SetSnapshot(snapshot);
         });
@@ -295,7 +313,11 @@ public partial class App : System.Windows.Application
 
     private void OnTokenHistoryUpdated(TokenHistorySnapshot snapshot)
     {
-        Dispatcher.InvokeAsync(() => _popup?.SetTokenHistorySnapshot(snapshot));
+        Dispatcher.InvokeAsync(() =>
+        {
+            _latestTokenSnapshot = snapshot;
+            _popup?.SetTokenHistorySnapshot(snapshot);
+        });
     }
 
     private async void ShutdownApplication()
@@ -366,6 +388,10 @@ public partial class App : System.Windows.Application
 
     private void ReleaseSingleInstanceMutex()
     {
+        _showWait?.Unregister(null);
+        _showWait = null;
+        _showRequested?.Dispose();
+        _showRequested = null;
         if (_singleInstanceMutex is null) return;
         if (_ownsSingleInstanceMutex)
         {

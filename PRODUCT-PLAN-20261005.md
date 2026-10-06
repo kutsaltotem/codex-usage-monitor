@@ -1,5 +1,8 @@
 # Windows Codex, Gemini ve Claude Kullanım Monitörü — Ürün Planı
 
+> **Güncel durum — 6 Ekim 2026:** Windows11x64 paketi derlendi ve yerelde kuruldu. Gösterge artık görev çubuğunun içinde; panel350x560DIP, kota taraması2dk ve panel açılışı yeni istek yapmaz. Antigravity'nin çalışan yerel servisi önceliklidir. Geçmiş çizgi grafiği/sağlayıcı filtreleri, sabit token toplamları ve lazy model dökümü uygulanmıştır. Codex ve Antigravity canlı; ücretli Claude gerçek hesap doğrulaması bekliyor. Aşağıdaki ilk plan tarihsel taslaktır; ürünün güncel kurulumu ve sınırları [README](README.md) ve [kurulum rehberinde](docs/INSTALL.md) geçerlidir.
+
+
 İlk araştırma: 5 Ekim 2026 · KDE Agents Usage ve Windows Usage Monitor incelemesi: 6 Ekim 2026
 
 ## Güncel karar — 6 Ekim 2026

@@ -29,6 +29,7 @@ jobs:
           $archivePath = Join-Path $env:RUNNER_TEMP 'CodexUsageMonitor-win-x64.zip'
           dotnet publish windows-app/UsageMonitor.Windows/UsageMonitor.Windows.csproj --configuration Release --runtime win-x64 --self-contained true --output $publishDirectory
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -LiteralPath scripts/Install.ps1, scripts/Install.cmd, docs/INSTALL.md -Destination $publishDirectory
           Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
 
       - name: Upload app package

@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot 'windows-app\UsageMonitor.Windows\UsageMonitor.Windows.csproj'
@@ -23,6 +23,9 @@ New-Item -ItemType Directory -Force -Path $publishDirectory | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw 'Windows x64 derlemesi başarısız oldu.'
 }
+
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install.ps1'), (Join-Path $PSScriptRoot 'Install.cmd') -Destination $publishDirectory
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL.md') -Destination (Join-Path $publishDirectory 'INSTALL.md')
 
 Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
 Write-Output "Paket hazır: $archivePath"

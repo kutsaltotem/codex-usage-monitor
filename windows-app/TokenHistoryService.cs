@@ -74,7 +74,7 @@ public sealed class TokenHistoryService : IAsyncDisposable
                 _loaded = true;
             }
 
-            if (_runTask is null)
+            if (_settings.AnyEnabled && _runTask is null)
             {
                 _runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 _runTask = RunTimerAsync(_runCancellation.Token);
@@ -114,7 +114,8 @@ public sealed class TokenHistoryService : IAsyncDisposable
         finally { _gate.Release(); }
 
         Publish(snapshot);
-        EnsureTimerStarted(cancellationToken);
+        if (_settings.AnyEnabled) EnsureTimerStarted(cancellationToken);
+        else _runCancellation?.Cancel();
         return snapshot;
     }
 
@@ -164,6 +165,7 @@ public sealed class TokenHistoryService : IAsyncDisposable
         }
         finally { _gate.Release(); }
 
+        _runCancellation?.Cancel();
         Publish(snapshot);
         return snapshot;
     }
@@ -301,7 +303,8 @@ public sealed class TokenHistoryService : IAsyncDisposable
 
     private void EnsureTimerStarted(CancellationToken cancellationToken)
     {
-        if (_runTask is not null) return;
+        if (_runTask is not null && !_runTask.IsCompleted && _runCancellation?.IsCancellationRequested != true) return;
+        _runCancellation?.Dispose();
         _runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _runTask = RunTimerAsync(_runCancellation.Token);
     }

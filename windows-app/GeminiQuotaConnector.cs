@@ -22,6 +22,8 @@ public sealed class GeminiQuotaConnector(HttpClient http) : IQuotaConnector
         using var fetchTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         fetchTimeout.CancelAfter(TimeSpan.FromSeconds(30));
         var fetchToken = fetchTimeout.Token;
+        var local = await AntigravityLocalQuota.FetchAsync(cancellationToken);
+        if (local is not null) return local;
         var credential = LocalCredentialReader.ReadGemini();
         if (credential is null)
             return Empty("not_signed_in", "Gemini CLI/Antigravity oturumu bulunamadı.");

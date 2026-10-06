@@ -8,11 +8,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <ApplicationIcon>..\..\assets\usage-monitor.ico</ApplicationIcon>
     <AssemblyName>CodexUsageMonitor</AssemblyName>
+    <Version>0.2.0</Version>
+    <Product>AI Usage Bar</Product>
     <RootNamespace>CodexUsageMonitor.Windows</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\..\assets\usage-monitor.ico" Link="Assets\usage-monitor.ico" CopyToOutputDirectory="PreserveNewest" />
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
     <ProjectReference Include="..\UsageMonitor.Core.csproj" />
     <Content Include="..\..\assets\openai-mark-codex.jpg" Link="Assets\openai-mark-codex.jpg" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\gemini-mark.jpg" Link="Assets\gemini-mark.jpg" CopyToOutputDirectory="PreserveNewest" />
