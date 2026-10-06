@@ -85,7 +85,7 @@ public sealed class QuotaSnapshotStore
         var temporary = _historyPath + ".prune-" + Guid.NewGuid().ToString("N");
         try
         {
-            await using (var input = new StreamReader(new FileStream(_historyPath, FileMode.Open, FileAccess.Read, FileShare.Read, 16_384, useAsync: true)))
+            using (var input = new StreamReader(new FileStream(_historyPath, FileMode.Open, FileAccess.Read, FileShare.Read, 16_384, useAsync: true)))
             await using (var output = new StreamWriter(new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 16_384, useAsync: true)))
             {
                 while (await input.ReadLineAsync(cancellationToken) is { } line)
