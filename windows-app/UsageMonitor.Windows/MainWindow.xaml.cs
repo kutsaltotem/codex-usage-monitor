@@ -295,7 +295,7 @@ public partial class MainWindow : Window
         {
             Background = Brush(remainingValue is null ? "#657180" : remaining <= 10 ? "#EC777A" : remaining <= 30 ? "#E8B75F" : accent),
             CornerRadius = new CornerRadius(3),
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Width = double.NaN
         };
         track.Child = fill;

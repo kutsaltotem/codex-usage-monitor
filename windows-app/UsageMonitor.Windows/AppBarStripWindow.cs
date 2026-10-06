@@ -161,7 +161,7 @@ public sealed class AppBarStripWindow : Window, IDisposable
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
             Padding = new Thickness(7, 5, 7, 5),
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
@@ -278,7 +278,7 @@ public sealed class AppBarStripWindow : Window, IDisposable
         {
             source = new BitmapImage();
             source.BeginInit();
-            source.UriSource = new Uri(path, UriKind.Absolute);
+            source.UriSource = new System.Uri(path, System.UriKind.Absolute);
             source.CacheOption = BitmapCacheOption.OnLoad;
             source.EndInit();
             source.Freeze();

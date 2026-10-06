@@ -350,7 +350,7 @@ public partial class MainWindow
         legend.Children.Add(CreateLegend("Claude", "#E2A078"));
         stack.Children.Add(legend);
 
-        var chart = new Canvas { Height = 128, HorizontalAlignment = HorizontalAlignment.Stretch, ClipToBounds = true };
+        var chart = new Canvas { Height = 128, HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch, ClipToBounds = true };
         chart.SizeChanged += (_, _) => DrawTokenChart(chart, rows);
         stack.Children.Add(chart);
 
@@ -619,7 +619,7 @@ public partial class MainWindow
                 TextWrapping = TextWrapping.Wrap
             });
             var track = new Border { Background = Brush("#3C4653"), CornerRadius = new CornerRadius(2), Height = 3, ClipToBounds = true, Margin = new Thickness(0, 5, 0, 0) };
-            var fill = new Border { Background = Brush(ProviderAccent(item.ProviderId)), CornerRadius = new CornerRadius(2), HorizontalAlignment = HorizontalAlignment.Left };
+            var fill = new Border { Background = Brush(ProviderAccent(item.ProviderId)), CornerRadius = new CornerRadius(2), HorizontalAlignment = System.Windows.HorizontalAlignment.Left };
             track.Child = fill;
             track.SizeChanged += (_, _) => fill.Width = track.ActualWidth * item.Total / max;
             rowStack.Children.Add(track);
