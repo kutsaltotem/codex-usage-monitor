@@ -1,4 +1,4 @@
-# Süper Zeka Kullanımı · AI Usage Bar
+﻿# Süper Zeka Kullanımı · AI Usage Bar
 
 **Codex, Gemini ve Claude kotanı tek bakışta gör. Akışını bölmeden çalışmaya devam et.**
 

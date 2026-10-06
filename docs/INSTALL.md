@@ -1,4 +1,4 @@
-# Windows kurulumu
+﻿# Windows kurulumu
 
 ## Hazır paket
 
@@ -25,9 +25,9 @@ Uygulama oturum açma veya token yenileme işlemi yapmaz. Girişin süresi doldu
 
 ## Günlük kullanım
 
-Göstergeyi tıklamak paneli açar; tekrar tıklamak veya başka uygulamaya geçmek kapatır. Kota verisi2dakikada bir güncellenir. Eski ölçüm varsa tarihi korunur. Marka yanındaki **!** üzerine gel veya tıkla: kaynak, neden ve öneri görünür.
+Göstergeyi tıklamak paneli açar; tekrar tıklamak veya başka uygulamaya geçmek kapatır. Kota verisi2 dakikada bir güncellenir. Eski ölçüm varsa tarihi korunur. Marka yanındaki **!** üzerine gel veya tıkla: kaynak, neden ve öneri görünür.
 
-Tepsi menüsünden **Windows oturumunda başlat**, **Düşük kota uyarıları** ve gösterge görünürlüğü seçilebilir. Geçmişin en altındaki Token kayıtları, yalnız yerel CLI toplamlarını isteğe bağlı açar. Saklama30/90/365gün; temizleme kota geçmişini silmez.
+Tepsi menüsünden **Windows oturumunda başlat**, **Düşük kota uyarıları** ve gösterge görünürlüğü seçilebilir. Geçmişin en altındaki Token kayıtları, yalnız yerel CLI toplamlarını isteğe bağlı açar. Saklama30/90/365 gün; temizleme kota geçmişini silmez.
 
 ## Güncelleme ve kaldırma
 
@@ -44,4 +44,4 @@ Kaldırmadan önce tepsi menüsünden otomatik başlangıcı kapat ve **Çıkı�
 | Token geçmişi boş | İlgili CLI günlükleri bulunmalı, toplama seçimi açık olmalı; Desktop sohbetleri bu sayaçlara dahil değil |
 | Claude Desktop girişli ama bağlantı yok | Desktop girişi ve Claude Code abonelik oturumu farklı kaynaklardır |
 
-Windows11x64'te doğrulanmış bir önizlemedir. Farklı DPI, otomatik gizlenen görev çubuğu ve Explorer yeniden başlatma sorunlarını ekran görüntüsü ve Windows sürümüyle [Issues](https://github.com/kutsaltotem/codex-usage-monitor/issues) üzerinden bildir. Oturum dosyası, API anahtarı, çerez veya özel sohbet günlüklerini yükleme.
+Windows 11 x64'te doğrulanmış bir önizlemedir. Farklı DPI, otomatik gizlenen görev çubuğu ve Explorer yeniden başlatma sorunlarını ekran görüntüsü ve Windows sürümüyle [Issues](https://github.com/kutsaltotem/codex-usage-monitor/issues) üzerinden bildir. Oturum dosyası, API anahtarı, çerez veya özel sohbet günlüklerini yükleme.

@@ -1,4 +1,4 @@
-# AI Usage Bar · Süper Zeka Kullanımı
+﻿# AI Usage Bar · Süper Zeka Kullanımı
 
 **Keep Codex, Gemini and Claude quotas in sight without leaving your work.**
 
@@ -35,11 +35,11 @@ The .NET runtime is bundled. Tested on Windows 11 x64. This is an unsigned previ
 
 Codex uses the local Codex application session. Gemini uses the running, signed-in Antigravity local quota service with an existing OAuth fallback. Claude requires a local Claude Code subscription OAuth session; signing in to Claude Desktop alone is insufficient. Free Claude Desktop quota is not connected in this version. Live validation was performed for Codex and Antigravity; paid Claude support remains unverified on a real account.
 
-The taskbar shows **remaining** quota. History charts show **used** five-hour quota, or weekly quota when the five-hour window is unavailable. The last24hours label refers to observation times, not total consumption during that day. Antigravity's separate Claude/GPT group is not a Claude Code subscription. Token history only covers supported local CLI logs; it is not subscription usage or a bill.
+The taskbar shows **remaining** quota. History charts show **used** five-hour quota, or weekly quota when the five-hour window is unavailable. The last 24 hours label refers to observation times, not total consumption during that day. Antigravity's separate Claude/GPT group is not a Claude Code subscription. Token history only covers supported local CLI logs; it is not subscription usage or a bill.
 
 Quota snapshots and optional token summaries stay under `%LOCALAPPDATA%\CodexUsageMonitor`. Conversation text is not stored in the aggregate history. No analytics server receives your usage history; provider quota calls use your existing session. Credentials are not written into app history. The app does not refresh provider sessions.
 
-WPF has a memory cost: short local observations were roughly160–195MiB working set, not a controlled benchmark. Rendering is deferred and hidden panel visuals are released. Software rendering trades memory for CPU work.
+WPF has a memory cost: short local observations were roughly 160–195 MiB working set, not a controlled benchmark. Rendering is deferred and hidden panel visuals are released. Software rendering trades memory for CPU work.
 
 ## Build
 
@@ -48,6 +48,6 @@ dotnet run --project windows-app/UsageMonitor.Windows/UsageMonitor.Windows.cspro
 .\scripts\publish-windows.ps1
 ```
 
-Requires Windows and .NET10SDK. See the [verification report](WINDOWS-VERIFICATION-20261006.md). Provider endpoints and session formats are unofficial and may change.
+Requires Windows and .NET 10 SDK. See the [verification report](WINDOWS-VERIFICATION-20261006.md). Provider endpoints and session formats are unofficial and may change.
 
 Independent project. Not affiliated with or endorsed by OpenAI, Google or Anthropic. Brand assets belong to their respective owners.
