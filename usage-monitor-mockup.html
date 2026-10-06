@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kullanım Monitörü — Windows konsept tasarımı</title>
+<style>
+:root{font-family:"Segoe UI",Inter,Arial,sans-serif;color:#f4f6fb;background:#11151c;font-synthesis:none}*{box-sizing:border-box}body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#11151c}.desktop{height:100%;position:relative;background:radial-gradient(ellipse at 76% 2%,#253047 0,transparent 36%),linear-gradient(145deg,#151a24,#10141b 66%);padding:70px 88px}.desktop:before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 54%,rgba(79,103,148,.08) 54.1%,transparent 74%);pointer-events:none}.window{position:relative;width:1180px;height:630px;margin:50px auto;background:rgba(28,34,45,.86);border:1px solid rgba(255,255,255,.1);border-radius:18px;box-shadow:0 28px 90px #0008;padding:36px 42px;color:#abb4c5}.window .caption{font-size:15px;color:#9ba8bc}.window h1{font-size:28px;color:#e5eaf2;margin:46px 0 10px;font-weight:650}.window p{font-size:16px;line-height:1.65;max-width:740px}.skeleton{margin-top:45px;display:grid;grid-template-columns:1fr 1fr;gap:18px}.sk{height:92px;border-radius:12px;border:1px solid #343c4a;background:linear-gradient(90deg,#252c37,#2a313e,#252c37)}.warning{position:absolute;top:26px;right:32px;border:1px solid #806d41;background:#302a1dcc;color:#ffe1a0;font-size:13px;font-weight:700;border-radius:8px;padding:9px 12px;letter-spacing:.25px}.taskbar{position:absolute;bottom:0;left:0;width:100%;height:80px;background:rgba(20,23,29,.96);border-top:1px solid #ffffff17;display:flex;align-items:center;padding:0 28px;backdrop-filter:blur(24px);box-shadow:0 -8px 30px #0004}.task-left{display:flex;align-items:center;gap:18px}.win{width:25px;height:25px;display:grid;grid-template-columns:1fr 1fr;gap:3px}.win i{background:#a9c7ff;border-radius:1px}.search{height:42px;width:260px;background:#2a2e36;border-radius:22px;color:#b4bac5;display:flex;align-items:center;padding:0 17px;gap:10px;font-size:15px}.pinned{margin-left:18px;display:flex;gap:19px;align-items:center}.appicon{width:35px;height:35px;border-radius:9px;display:grid;place-items:center;color:white;font-size:16px;font-weight:700;position:relative}.appicon.on:after{content:"";position:absolute;bottom:-12px;width:16px;height:3px;background:#c8d6ec;border-radius:3px}.file{background:#d5a845}.edge{background:#217f9d}.vscode{background:#1a70b8}.term{background:#31333b}.teams{background:#5c55b6}.midslot{position:absolute;left:50%;transform:translateX(-50%);height:58px;width:620px;display:flex;align-items:center;justify-content:space-evenly;padding:0 10px;background:#20252e;border:1px solid #38414e;border-radius:13px;box-shadow:0 6px 20px #0005}.indicators{display:flex;align-items:center;gap:7px}.provider-chip{height:42px;display:flex;align-items:center;gap:6px;padding:0 7px;border-radius:9px;background:#282f3a;border:1px solid #363f4c}.period-group{display:flex;align-items:center;gap:3px}.period-time,.period-percent{font-size:11.5px;line-height:1;padding:4px 4px;border-radius:5px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}.period-time{color:#e2e8f1;background:#202630}.period-separator{width:1px;height:19px;background:#4b5563;margin:0 1px}.codex-chip .period-percent{color:#9ce8d1;background:#153f36}.gemini-chip .period-percent{color:#bdceff;background:#25385f}.logo-slot{width:20px;height:20px;border:1px solid #fff;border-radius:5px;display:grid;place-items:center;background:#fff;overflow:hidden;flex:none}.logo-slot img{display:block;width:calc(100% - 3px);height:calc(100% - 3px);object-fit:contain}.mini-values{display:flex;gap:4px;align-items:center}.mini{font-size:12px;line-height:1;color:#e2e8f1;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}.tray{margin-left:auto;display:flex;align-items:center;gap:17px;color:#e1e5eb;font-size:14px}.time{text-align:right;line-height:1.35;font-size:13px}.flyout{position:absolute;bottom:94px;left:50%;transform:translateX(-50%);width:548px;background:#222831;border:1px solid #3c4552;border-radius:16px;box-shadow:0 18px 65px #0009;padding:19px 20px;color:#edf1f7}.flyhead{display:flex;align-items:flex-start;justify-content:space-between}.title{font-size:18px;font-weight:700;letter-spacing:-.2px}.sub{font-size:12px;color:#aeb9c8;margin-top:5px}.sample-badge{font-size:11px;letter-spacing:.25px;font-weight:750;color:#ffe1a0;border:1px solid #806d41;background:#302a1d;border-radius:6px;padding:6px 8px;white-space:nowrap}.cards{margin-top:15px;display:grid;gap:9px}.card{border:1px solid #39424f;background:#272e38;border-radius:11px;padding:12px 13px}.card-head{display:flex;align-items:center;gap:10px}.card .logo-slot{width:31px;height:31px;border-radius:7px}.card-name{font-size:15px;font-weight:700}.card-demo{margin-left:auto;font-size:10px;color:#ffe1a0;font-weight:750;letter-spacing:.3px;border:1px solid #756442;border-radius:5px;padding:4px 6px}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}.metric{background:#222831;border:1px solid #343d49;border-radius:8px;padding:9px 10px}.metric-title{font-size:11px;color:#b3bfce;font-weight:650}.metric-line{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-top:6px}.metric-value{font-size:14px;color:#f3f6fb;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}.metric-reset{font-size:11px;color:#c0c9d5;white-space:nowrap}.progress-track{height:5px;border-radius:999px;background:#414955;margin-top:8px;overflow:hidden}.progress-fill{height:100%;border-radius:999px}.codex-fill{background:#33c69a}.gemini-fill{background:#81a6ff}.card-status{font-size:11px;color:#aab5c4;margin-top:9px}.card-status strong{color:#d4deea;font-weight:650}.foot{display:flex;justify-content:space-between;align-items:center;margin-top:13px;padding-top:11px;border-top:1px solid #39424f;color:#aeb9c8;font-size:11px}.settings{color:#c3d1e4}
+
+/* Token usage view: kept separate from the approved quota bars. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.fly-tabs{display:flex;gap:4px;margin-top:15px;padding:3px;border:1px solid #39424f;background:#1c222b;border-radius:9px}
+.fly-tab{flex:1;border:0;border-radius:6px;background:transparent;color:#aeb9c8;font:650 12px "Segoe UI",Inter,Arial,sans-serif;padding:8px 10px;cursor:pointer;transition:background .15s,color .15s}
+.fly-tab:hover{color:#f3f6fb;background:#2a323e}
+.fly-tab[aria-selected="true"]{color:#f4f7fb;background:#394454;box-shadow:inset 0 0 0 1px #4a5667}
+.fly-tab:focus-visible,.period-button:focus-visible,.provider-select:focus-visible{outline:2px solid #9dc0ff;outline-offset:2px}
+.tab-panel[hidden]{display:none}
+.tab-panel .cards{margin-top:12px}
+.usage-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}
+.period-pills{display:flex;align-items:center;gap:2px;padding:3px;border:1px solid #39424f;background:#1c222b;border-radius:8px}
+.period-button{border:0;border-radius:5px;padding:6px 7px;background:transparent;color:#aeb9c8;font:650 10px "Segoe UI",Inter,Arial,sans-serif;white-space:nowrap;cursor:pointer}
+.period-button:hover{color:#f3f6fb;background:#2b3440}
+.period-button[aria-pressed="true"]{background:#3b4655;color:#f5f7fa}
+.provider-select{min-width:90px;border:1px solid #39424f;border-radius:8px;background:#272e38;color:#eaf0f7;padding:7px 9px;font:650 11px "Segoe UI",Inter,Arial,sans-serif}
+.summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px}
+.token-kpi{min-width:0;border:1px solid #39424f;background:#272e38;border-radius:10px;padding:10px 12px}
+.kpi-label{font-size:10px;letter-spacing:.2px;color:#bac4d1;font-weight:700}
+.kpi-value{font-size:22px;line-height:1.2;color:#f3f6fb;font-weight:730;font-variant-numeric:tabular-nums;margin-top:3px}
+.kpi-sub{font-size:10px;line-height:1.45;color:#aeb9c8;margin-top:3px}
+.usage-card{margin-top:9px;border:1px solid #39424f;background:#272e38;border-radius:10px;padding:11px 12px}
+.usage-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.usage-card-title{font-size:12px;color:#edf1f7;font-weight:700}
+.usage-card-meta{font-size:10px;color:#aeb9c8;white-space:nowrap}
+.local-note{font-size:10px;color:#aeb9c8;line-height:1.45;margin-top:8px}
+.chart-legend{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:10px;color:#c2cbd7}
+.legend-item{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.legend-dot{width:7px;height:7px;border-radius:2px;display:inline-block}
+.legend-codex{background:#33c69a}.legend-gemini{background:#81a6ff}.legend-claude{background:#e1a66e}
+.usage-chart{display:block;width:100%;height:auto;margin-top:1px;overflow:visible}
+.chart-gridline{stroke:#414955;stroke-width:1;stroke-dasharray:2 4}
+.chart-axis-label{fill:#96a2b2;font:10px "Segoe UI",Inter,Arial,sans-serif}
+.chart-x-label{fill:#aeb9c8;font:9px "Segoe UI",Inter,Arial,sans-serif}
+.chart-column{cursor:crosshair;outline:none}.chart-hit{cursor:crosshair}
+.chart-column:hover .bar-codex,.chart-column:focus .bar-codex{filter:brightness(1.25)}
+.chart-column:hover .bar-gemini,.chart-column:focus .bar-gemini{filter:brightness(1.2)}
+.chart-column:hover .bar-claude,.chart-column:focus .bar-claude{filter:brightness(1.2)}
+.chart-detail{min-height:26px;margin-top:1px;padding:6px 8px;border:1px solid #39424f;border-radius:7px;background:#222831;color:#c9d3df;font-size:10px;line-height:1.35;font-variant-numeric:tabular-nums}
+.chart-detail strong{color:#edf1f7;font-weight:700}
+.model-table-wrap{overflow-x:auto;margin-top:9px}
+.model-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px;font-variant-numeric:tabular-nums}
+.model-table th{padding:7px 4px;color:#aeb9c8;text-align:right;font-weight:650;border-bottom:1px solid #414955;white-space:nowrap}
+.model-table th:first-child,.model-table td:first-child{text-align:left;width:42%}
+.model-table td{padding:7px 4px;text-align:right;color:#e5eaf1;border-bottom:1px solid #343d49;white-space:nowrap}
+.model-table tbody tr:last-child td{border-bottom:0}
+.model-name{font-size:10px;color:#eef2f7;font-weight:650;overflow:hidden;text-overflow:ellipsis}
+.model-provider{display:block;color:#9eabbc;font-size:9px;margin-top:2px}
+.model-cell-top{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.model-total{color:#c9d3df;font-size:9px;white-space:nowrap}
+.model-track{height:3px;margin-top:4px;border-radius:99px;background:#414955;overflow:hidden}
+.model-track span{display:block;height:100%;border-radius:99px}
+.model-empty{padding:15px 4px!important;text-align:center!important;color:#aeb9c8!important}
+.usage-foot{display:flex;justify-content:space-between;gap:9px;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid #39424f;color:#aeb9c8;font-size:9px;line-height:1.4}
+.claude-chip .period-percent{color:#f0b08f;background:#4b342f}.claude-fill{background:#e1a06f}
+.indicators{gap:4px}.provider-chip{gap:4px;padding:0 5px}.period-time,.period-percent{font-size:10.5px;padding:4px 3px}
+@media(max-width:640px){.flyout{width:calc(100vw - 20px);left:10px;transform:none}.period-button{padding-left:5px;padding-right:5px}.provider-select{min-width:78px;padding:7px 5px}.model-table{min-width:500px}}
+
+</style>
+</head>
+<body><main class="desktop"><div class="warning">KONSEPT · ÖRNEK VERİ</div><section class="window"><div class="caption">Kullanım Monitörü · Windows masaüstü konsepti</div><h1>Kullanım durumunu tek bakışta gör</h1><p>Tek görev çubuğu göstergesi, ChatGPT/Codex, Gemini ve Claude kullanım pencerelerini bir arada sunar. Bu ekran yalnızca örnektir; canlı kota bağlantısı yoktur.</p><div class="skeleton"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div></section>
+<section class="flyout" aria-label="Örnek kullanım ayrıntıları"><div class="flyhead"><div><div class="title">Kullanım özeti</div><div class="sub">Tüm değerler örnektir · canlı sağlayıcı verisi alınmıyor</div></div><div class="sample-badge">ÖRNEK VERİ</div></div><div class="fly-tabs" role="tablist" aria-label="Kullanım görünümü"><button class="fly-tab" id="tab-limits" role="tab" aria-selected="true" aria-controls="limits-panel" tabindex="0" data-tab="limits">Kota limitleri</button><button class="fly-tab" id="tab-tokens" role="tab" aria-selected="false" aria-controls="tokens-panel" tabindex="-1" data-tab="tokens">Token kullanımı</button></div><div class="tab-panel" id="limits-panel" role="tabpanel" aria-labelledby="tab-limits"><div class="cards">
+<article class="card"><div class="card-head"><span class="logo-slot"><img src="assets/openai-mark-codex.jpg" alt="" onerror="this.style.display='none'"></span><span class="card-name">Codex</span><span class="card-demo">ÖRNEK VERİ</span></div><div class="detail-grid"><div class="metric"><div class="metric-title">5 saatlik</div><div class="metric-line"><span class="metric-value">Kalan %55</span><span class="metric-reset">3 sa 10 dk sonra</span></div><div class="progress-track" aria-label="Kalan yüzde 55"><div class="progress-fill codex-fill" style="width:55%"></div></div></div><div class="metric"><div class="metric-title">Haftalık</div><div class="metric-line"><span class="metric-value">Kalan %78</span><span class="metric-reset">5 gün 3 sa sonra</span></div><div class="progress-track" aria-label="Kalan yüzde 78"><div class="progress-fill codex-fill" style="width:78%"></div></div></div></div><div class="card-status"><strong>Kaynak:</strong> örnek veri · canlı bağlantı yok</div></article>
+<article class="card"><div class="card-head"><span class="logo-slot"><img src="assets/gemini-mark.jpg" alt="" onerror="this.style.display='none'"></span><span class="card-name">Gemini</span><span class="card-demo">ÖRNEK VERİ</span></div><div class="detail-grid"><div class="metric"><div class="metric-title">5 saatlik</div><div class="metric-line"><span class="metric-value">Kalan %42</span><span class="metric-reset">2 sa 45 dk sonra</span></div><div class="progress-track" aria-label="Kalan yüzde 42"><div class="progress-fill gemini-fill" style="width:42%"></div></div></div><div class="metric"><div class="metric-title">Haftalık</div><div class="metric-line"><span class="metric-value">Kalan %67</span><span class="metric-reset">4 gün 8 sa sonra</span></div><div class="progress-track" aria-label="Kalan yüzde 67"><div class="progress-fill gemini-fill" style="width:67%"></div></div></div></div><div class="card-status"><strong>Kaynak:</strong> örnek veri · canlı bağlantı yok</div></article>
+<article class="card"><div class="card-head"><span class="logo-slot"><img src="assets/claude-mark.jpg" alt="" onerror="this.style.display='none'"></span><span class="card-name">Claude</span><span class="card-demo">ÖRNEK VERİ</span></div><div class="detail-grid"><div class="metric"><div class="metric-title">5 saatlik</div><div class="metric-line"><span class="metric-value">Kalan %63</span><span class="metric-reset">1 sa 20 dk sonra</span></div><div class="progress-track" aria-label="Kalan yüzde 63"><div class="progress-fill claude-fill" style="width:63%"></div></div></div><div class="metric"><div class="metric-title">Haftalık</div><div class="metric-line"><span class="metric-value">Kalan %31</span><span class="metric-reset">6 gün 14 sa sonra</span></div><div class="progress-track" aria-label="Kalan yüzde 31"><div class="progress-fill claude-fill" style="width:31%"></div></div></div></div><div class="card-status"><strong>Kaynak:</strong> örnek veri · canlı bağlantı yok</div></article>
+</div></div><div class="tab-panel" id="tokens-panel" role="tabpanel" aria-labelledby="tab-tokens" hidden>
+<div class="usage-controls"><div class="period-pills" role="group" aria-label="Dönem seç"><button class="period-button" data-period="7" aria-pressed="false">7 gün</button><button class="period-button" data-period="30" aria-pressed="true">30 gün</button><button class="period-button" data-period="90" aria-pressed="false">90 gün</button><button class="period-button" data-period="365" aria-pressed="false">1 yıl</button></div><label><span class="sr-only">Sağlayıcı seç</span><select class="provider-select" id="provider-filter" aria-label="Sağlayıcı filtresi"><option value="all">Tümü</option><option value="codex">Codex</option><option value="gemini">Gemini</option><option value="claude">Claude</option></select></label></div>
+<div class="summary-grid" aria-live="polite"><div class="token-kpi"><div class="kpi-label">TOPLAM TOKEN</div><div class="kpi-value" id="total-tokens">129.020</div><div class="kpi-sub">Yerel sayaç toplamı</div></div><div class="token-kpi"><div class="kpi-label">GİRDİ</div><div class="kpi-value" id="input-tokens">47.400</div><div class="kpi-sub">Input</div></div><div class="token-kpi"><div class="kpi-label">ÇIKTI</div><div class="kpi-value" id="output-tokens">29.200</div><div class="kpi-sub">Output</div></div></div>
+<div class="usage-card"><div class="usage-card-head"><div class="usage-card-title" id="chart-title">Haftalık toplam · son 30 gün</div><div class="usage-card-meta">Üstüne gel: ayrıntı</div></div><div class="chart-legend" aria-label="Grafik serileri"><span class="legend-item" data-provider="codex"><i class="legend-dot legend-codex"></i>Codex</span><span class="legend-item" data-provider="gemini"><i class="legend-dot legend-gemini"></i>Gemini</span><span class="legend-item" data-provider="claude"><i class="legend-dot legend-claude"></i>Claude</span></div><svg class="usage-chart" id="usage-chart" viewBox="0 0 510 190" role="img" aria-label="Sağlayıcılara göre yığılmış token grafiği"></svg><div class="chart-detail" id="chart-detail" aria-live="polite"></div></div>
+<div class="usage-card"><div class="usage-card-head"><div class="usage-card-title">Model dağılımı</div><div class="usage-card-meta">Token türleri · sentetik örnek</div></div><div class="model-table-wrap"><table class="model-table"><thead><tr><th scope="col">Örnek model</th><th scope="col">Girdi</th><th scope="col">Çıktı</th><th scope="col">Cache oku</th><th scope="col">Cache yaz</th></tr></thead><tbody id="model-rows"></tbody></table></div><div class="local-note">Token günlükleri konuşma metni içerebilir. Uygulama yalnızca sayaçları yerel özete alır; ham günlük ve kimlik bilgisi saklanmaz.</div></div>
+<div class="usage-foot"><span>ÖRNEK VERİ · tüm rakamlar kurgusaldır; ağa istek atılmaz</span><span>Token toplamı kota/fatura değildir</span></div>
+</div><div class="foot"><span>Canlı entegrasyon yok · tüm kota verileri temsili</span><span class="settings">Ayarlar&nbsp; ↗</span></div></section>
+<script>
+(() => {
+  const models = [
+    { provider: 'codex', label: 'Codex', name: 'codex-model-a', input: 9200, output: 5600, read: 17800, write: 1100 },
+    { provider: 'gemini', label: 'Gemini', name: 'gemini-model-b', input: 14400, output: 8700, read: 2100, write: 350 },
+    { provider: 'claude', label: 'Claude', name: 'claude-sonnet-example', input: 12100, output: 6800, read: 15100, write: 850 },
+  ];
+  const providerMeta = {
+    codex: { label: 'Codex', color: '#33c69a', bar: 'bar-codex' },
+    gemini: { label: 'Gemini', color: '#81a6ff', bar: 'bar-gemini' },
+    claude: { label: 'Claude', color: '#e1a06f', bar: 'bar-claude' },
+  };
+  const periods = {
+    '7': { days: 7, title: 'Günlük toplam · son 7 gün', names: ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'], weights: [.08,.09,.12,.15,.14,.19,.23] },
+    '30': { days: 30, title: 'Haftalık toplam · son 30 gün', names: ['1. hf','2. hf','3. hf','4. hf','Bu hf'], weights: [.12,.17,.2,.23,.28] },
+    '90': { days: 90, title: 'Haftalık toplam · son 90 gün', names: ['1','2','3','4','5','6','7','8','9','10','11','12','13'], weights: [.06,.065,.07,.07,.075,.075,.08,.075,.08,.08,.085,.085,.1] },
+    '365': { days: 365, title: 'Aylık toplam · son 1 yıl', names: ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'], weights: [.07,.065,.08,.075,.085,.075,.08,.09,.085,.09,.1,.105] }
+  };
+  const number = value => Math.round(value).toLocaleString('tr-TR');
+  const short = value => {
+    const v = Math.round(value);
+    if (v >= 1000000) return (v / 1000000).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + 'm';
+    if (v >= 1000) return (v / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + 'k';
+    return String(v);
+  };
+  const splitByWeights = (total, weights) => {
+    let remaining = Math.round(total);
+    return weights.map((weight, index) => {
+      const value = index === weights.length - 1 ? remaining : Math.round(total * weight);
+      remaining -= value;
+      return value;
+    });
+  };
+  let selectedPeriod = '30';
+  const providerFilter = document.getElementById('provider-filter');
+  const svg = document.getElementById('usage-chart');
+  const modelRows = document.getElementById('model-rows');
+  const chartDetail = document.getElementById('chart-detail');
+  const chartTitle = document.getElementById('chart-title');
+  const filteredModels = () => models.filter(model => providerFilter.value === 'all' || model.provider === providerFilter.value);
+  function render() {
+    const period = periods[selectedPeriod];
+    const factor = period.days / 30;
+    const rows = filteredModels().map(model => ({ ...model, input: Math.round(model.input * factor), output: Math.round(model.output * factor), read: Math.round(model.read * factor), write: Math.round(model.write * factor) })).sort((a, b) => (b.input + b.output + b.read + b.write) - (a.input + a.output + a.read + a.write));
+    const totals = rows.reduce((sum, row) => ({ input: sum.input + row.input, output: sum.output + row.output, read: sum.read + row.read, write: sum.write + row.write }), { input: 0, output: 0, read: 0, write: 0 });
+    const totalTokens = totals.input + totals.output + totals.read + totals.write;
+    document.getElementById('total-tokens').textContent = number(totalTokens);
+    document.getElementById('input-tokens').textContent = number(totals.input);
+    document.getElementById('output-tokens').textContent = number(totals.output);
+    chartTitle.textContent = period.title;
+    renderModels(rows);
+    renderChart(period, factor);
+  }
+  function renderModels(rows) {
+    if (!rows.length) {
+      modelRows.innerHTML = '<tr><td class="model-empty" colspan="5">Bu filtrede örnek kayıt yok</td></tr>';
+      return;
+    }
+    const maxTotal = Math.max(1, ...rows.map(row => row.input + row.output + row.read + row.write));
+    modelRows.innerHTML = rows.map(row => {
+      const total = row.input + row.output + row.read + row.write;
+      const bar = Math.max(3, total / maxTotal * 100);
+      return `<tr><td><div class="model-cell-top"><span class="model-name">${row.name}</span><span class="model-total">${short(total)}</span></div><div class="model-track"><span style="width:${bar}%;background:${providerMeta[row.provider].color}"></span></div><span class="model-provider">${providerMeta[row.provider].label} · Örnek</span></td><td>${short(row.input)}</td><td>${short(row.output)}</td><td>${short(row.read)}</td><td>${short(row.write)}</td></tr>`;
+    }).join('');
+  }
+  function renderChart(period, factor) {
+    const keys = ['codex', 'gemini', 'claude'];
+    document.querySelectorAll('.legend-item[data-provider]').forEach(item => { item.hidden = providerFilter.value !== 'all' && item.dataset.provider !== providerFilter.value; });
+    const totals = Object.fromEntries(keys.map(key => [key, filteredModels().filter(row => row.provider === key).reduce((sum, row) => sum + row.input + row.output + row.read + row.write, 0) * factor]));
+    const series = Object.fromEntries(keys.map(key => [key, splitByWeights(totals[key], period.weights)]));
+    const count = period.names.length;
+    const left = 42, right = 505, top = 18, bottom = 154, plotHeight = bottom - top;
+    const max = Math.max(1, ...period.names.map((_, i) => keys.reduce((sum, key) => sum + series[key][i], 0)));
+    const scaleStep = Math.pow(10, Math.floor(Math.log10(max)));
+    const scaleMax = Math.ceil(max / scaleStep) * scaleStep;
+    const slot = (right - left) / count;
+    const barW = Math.max(8, Math.min(25, slot * .56));
+    let markup = '';
+    for (let t = 0; t <= 3; t++) {
+      const y = bottom - plotHeight * t / 3;
+      markup += `<line x1="${left}" y1="${y}" x2="${right}" y2="${y}" class="chart-gridline"/><text x="${left - 5}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${short(scaleMax * t / 3)}</text>`;
+    }
+    period.names.forEach((name, index) => {
+      const x = left + index * slot + (slot - barW) / 2;
+      let y = bottom;
+      let detail = `${name} · `;
+      keys.forEach(key => {
+        const value = series[key][index];
+        const h = Math.max(value ? .8 : 0, plotHeight * value / scaleMax);
+        y -= h;
+        const meta = providerMeta[key];
+        markup += `<rect class="${meta.bar}" data-column="${index}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${h.toFixed(2)}" rx="2" fill="${meta.color}"><title>${name} · ${meta.label}: ${number(value)} token</title></rect>`;
+        detail += `${meta.label} ${short(value)}${key === keys[keys.length - 1] ? '' : ' · '}`;
+      });
+      markup += `<text x="${x + barW / 2}" y="174" text-anchor="middle" class="chart-x-label">${name}</text>`;
+      // Add an invisible hit target across the whole stacked column for keyboard and pointer detail.
+      markup += `<rect class="chart-hit" data-column="${index}" x="${x.toFixed(2)}" y="${top}" width="${barW.toFixed(2)}" height="${plotHeight}" fill="transparent" tabindex="0" role="button" aria-label="${detail}"><title>${detail}</title></rect>`;
+    });
+    svg.innerHTML = markup;
+    const showDetail = index => {
+      const total = keys.reduce((sum, key) => sum + series[key][index], 0);
+      const name = period.names[index];
+      const parts = keys.filter(key => providerFilter.value === 'all' || providerFilter.value === key).map(key => `${providerMeta[key].label} ${number(series[key][index])}`).join(' · ');
+      chartDetail.innerHTML = `<strong>${name}</strong> · ${parts} · Toplam ${number(total)} token`;
+    };
+    svg.querySelectorAll('[data-column]').forEach(node => {
+      node.addEventListener('mouseenter', () => showDetail(Number(node.dataset.column)));
+      node.addEventListener('focus', () => showDetail(Number(node.dataset.column)));
+      node.addEventListener('click', () => showDetail(Number(node.dataset.column)));
+    });
+    showDetail(count - 1);
+  }
+  document.querySelectorAll('.period-button').forEach(button => button.addEventListener('click', () => {
+    selectedPeriod = button.dataset.period;
+    document.querySelectorAll('.period-button').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    render();
+  }));
+  providerFilter.addEventListener('change', render);
+  const tabButtons = Array.from(document.querySelectorAll('.fly-tab'));
+  function activateTab(name, focus = false) {
+    tabButtons.forEach(button => {
+      const active = button.dataset.tab === name;
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    document.getElementById('limits-panel').hidden = name !== 'limits';
+    document.getElementById('tokens-panel').hidden = name !== 'tokens';
+    if (focus) document.querySelector(`.fly-tab[data-tab="${name}"]`).focus();
+  }
+  tabButtons.forEach(button => button.addEventListener('click', () => activateTab(button.dataset.tab)));
+  tabButtons.forEach((button, index) => button.addEventListener('keydown', event => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabButtons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabButtons.length) % tabButtons.length;
+    activateTab(tabButtons[next].dataset.tab, true);
+  }));
+  render();
+  // A preview-only query makes it possible to capture the new tab without changing the normal default.
+  if (new URLSearchParams(location.search).get('view') === 'tokens') activateTab('tokens');
+})();
+</script>
+<footer class="taskbar"><div class="task-left"><div class="win"><i></i><i></i><i></i><i></i></div><div class="search">⌕&nbsp; Ara</div><div class="pinned"><div class="appicon file">▰</div><div class="appicon edge">e</div><div class="appicon vscode">⌘</div><div class="appicon term on">›_</div><div class="appicon teams">T</div></div></div>
+<div class="midslot" aria-label="Örnek görev çubuğu göstergesi"><div class="indicators">
+<div class="provider-chip codex-chip" aria-label="Codex örnek değerleri"><span class="logo-slot"><img src="assets/openai-mark-codex.jpg" alt=""></span><span class="period-group"><span class="period-time">3s10d</span><span class="period-percent">%55</span></span><span class="period-separator"></span><span class="period-group"><span class="period-time">5g3s</span><span class="period-percent">%78</span></span></div>
+<div class="provider-chip gemini-chip" aria-label="Gemini örnek değerleri"><span class="logo-slot"><img src="assets/gemini-mark.jpg" alt=""></span><span class="period-group"><span class="period-time">2s45d</span><span class="period-percent">%42</span></span><span class="period-separator"></span><span class="period-group"><span class="period-time">4g8s</span><span class="period-percent">%67</span></span></div>
+<div class="provider-chip claude-chip" aria-label="Claude örnek değerleri"><span class="logo-slot"><img src="assets/claude-mark.jpg" alt=""></span><span class="period-group"><span class="period-time">1s20d</span><span class="period-percent">%63</span></span><span class="period-separator"></span><span class="period-group"><span class="period-time">6g14sa</span><span class="period-percent">%31</span></span></div>
+</div></div><div class="tray"><span>⌃</span><span>◔</span><span>🔊</span><span>▰</span><div class="time">14:08<br>06.10.2026</div></div></footer></main></body></html>

@@ -1,0 +1,21 @@
+# .NET build output
+bin/
+obj/
+out/
+publish/
+artifacts/
+
+# Visual Studio / IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+Thumbs.db
+Desktop.ini

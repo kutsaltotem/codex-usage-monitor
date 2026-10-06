@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>CodexUsageMonitor</AssemblyName>
+    <RootNamespace>CodexUsageMonitor.Windows</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UsageMonitor.Core.csproj" />
+    <Content Include="..\..\assets\openai-mark-codex.jpg" Link="Assets\openai-mark-codex.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\gemini-mark.jpg" Link="Assets\gemini-mark.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\claude-mark.jpg" Link="Assets\claude-mark.jpg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
