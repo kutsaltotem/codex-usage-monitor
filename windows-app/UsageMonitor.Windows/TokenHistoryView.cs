@@ -663,13 +663,6 @@ public partial class MainWindow
         _ => "ChatGPT / Codex"
     };
 
-    private static string ProviderAccent(string providerId) => providerId switch
-    {
-        "gemini" => "#829DFF",
-        "claude" => "#E2A078",
-        _ => "#8DDEC4"
-    };
-
     private static Border MakeTokenCard() => new()
     {
         Background = Brush("#242B35"),
@@ -680,7 +673,7 @@ public partial class MainWindow
         Margin = new Thickness(0, 0, 0, 8)
     };
 
-    private static Button MakeHistoryButton(string label, bool primary) => new()
+    private static System.Windows.Controls.Button MakeHistoryButton(string label, bool primary) => new()
     {
         Content = label,
         Style = (Style)Application.Current.FindResource("ActionButton"),
@@ -690,7 +683,7 @@ public partial class MainWindow
         BorderBrush = Brush(primary ? "#416558" : "#465363")
     };
 
-    private static Button MakeFilterButton(string label, bool selected) => new()
+    private static System.Windows.Controls.Button MakeFilterButton(string label, bool selected) => new()
     {
         Content = label,
         Style = (Style)Application.Current.FindResource("ActionButton"),
