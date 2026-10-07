@@ -79,10 +79,13 @@ public partial class MainWindow : Window
 
     public void AlignTo(System.Drawing.Rectangle anchor)
     {
-        if (!IsVisible || anchor.Width <= 0) return;
+        if (!IsVisible) return;
+        if (anchor.Width <= 0) { Hide(); return; }
         var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
-        Width = anchor.Width / scale;
-        Left = anchor.Left / scale;
+        Width = Math.Max(350, anchor.Width / scale);
+        var screen = System.Windows.Forms.Screen.FromRectangle(anchor).WorkingArea;
+        Left = Math.Clamp(anchor.Right / scale - Width, screen.Left / scale,
+            Math.Max(screen.Left / scale, screen.Right / scale - Width));
         Top = anchor.Top / scale - ActualHeight;
     }
 

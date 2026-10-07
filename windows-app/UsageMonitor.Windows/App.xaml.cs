@@ -42,6 +42,7 @@ public partial class App : System.Windows.Application
         {
             try
             {
+                if (e.Args.Contains("--background-start")) { Shutdown(); return; }
                 using var request = EventWaitHandle.OpenExisting(@"Local\CodexUsageMonitor.Show");
                 request.Set();
             }
@@ -153,11 +154,7 @@ public partial class App : System.Windows.Application
         try
         {
             startupItem.Checked = WindowsStartupRegistration.IsEnabled();
-            if (startupItem.Checked)
-            {
-                try { WindowsStartupRegistration.SetEnabled(true); } // Refresh the path if the portable folder moved.
-                catch (Exception) { startupItem.ToolTipText = "Açılış kaydı güncellenemedi; eski yol kullanılıyor."; }
-            }
+
         }
         catch (Exception) { startupItem.Enabled = false; }
         var changingStartupItem = false;

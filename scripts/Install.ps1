@@ -1,4 +1,4 @@
-[CmdletBinding(SupportsShouldProcess)]
+﻿[CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\CodexUsageMonitor'),
     [switch]$SkipLaunch,
@@ -11,8 +11,8 @@ $destination = [IO.Path]::GetFullPath($InstallDirectory)
 if ($destination.TrimEnd('\') -eq $PSScriptRoot.TrimEnd('\')) { throw 'Kaynak ve kurulum klasörü aynı olamaz. Taşınabilir kullanım için EXE dosyasını açın.' }
 if (-not $PSCmdlet.ShouldProcess($destination,'Install Süper Zeka Kullanımı')) { return }
 $installedExecutable = Join-Path $destination 'CodexUsageMonitor.exe'
-Get-Process -Name CodexUsageMonitor -ErrorAction SilentlyContinue | ForEach-Object {
-    try { if ($_.Path -eq $installedExecutable) { Stop-Process -Id $_.Id -ErrorAction Stop } }
+Get-Process -Name CodexUsageMonitor,UsageMonitorSupervisor -ErrorAction SilentlyContinue | ForEach-Object {
+    try { if ($_.Path -eq $installedExecutable -or $_.Path -eq (Join-Path $destination 'UsageMonitorSupervisor.exe')) { Stop-Process -Id $_.Id -ErrorAction Stop } }
     catch { throw 'Kurulu uygulamayı tepsi menüsünden kapatıp yeniden deneyin.' }
 }
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
@@ -30,4 +30,10 @@ if (-not $SkipShortcuts) {
     [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null
 }
 Write-Host "Kuruldu: $destination"
-if (-not $SkipLaunch) { Start-Process -FilePath $installedExecutable -WindowStyle Hidden }
+if (-not $SkipLaunch) {
+    $taskName = 'CodexUsageMonitor-' + [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $startupTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($startupTask -and $startupTask.Settings.Enabled -and $startupTask.Actions.Execute -eq (Join-Path $destination 'UsageMonitorSupervisor.exe')) {
+        Start-ScheduledTask -TaskName $taskName
+    } else { Start-Process -FilePath $installedExecutable -WindowStyle Hidden }
+}

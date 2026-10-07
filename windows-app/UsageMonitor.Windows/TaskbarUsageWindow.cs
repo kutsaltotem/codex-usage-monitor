@@ -4,8 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Diagnostics;
-using System.Text.Json;
 using CodexUsageMonitor;
 using Forms = System.Windows.Forms;
 
@@ -20,7 +18,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
 
     public static bool IsIndicatorUnderPointer()
     {
-        return _instance is { } indicator && GetCursorPos(out var point) && indicator.ScreenBounds.Contains(point.X, point.Y);
+        return _instance is { IsVisible: true } indicator && GetCursorPos(out var point) && indicator.ScreenBounds.Contains(point.X, point.Y);
     }
 
     private readonly StackPanel _providerItems = new() { Orientation = Orientation.Horizontal };
@@ -33,7 +31,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
     private bool _disposed;
     private UsageSnapshot? _snapshot;
     private readonly System.Windows.Threading.DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
-    private readonly System.Windows.Threading.DispatcherTimer _anchor = new() { Interval = TimeSpan.FromMinutes(1) };
+    private readonly System.Windows.Threading.DispatcherTimer _anchor = new() { Interval = TimeSpan.FromSeconds(2) };
     private string? _lastPlacement;
     private IntPtr _locationHook;
     private WinEventCallback? _locationCallback;
@@ -75,7 +73,14 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
             _windowHandle = new WindowInteropHelper(this).Handle;
             _locationCallback = (_, _, hwnd, _, _, _, _) =>
             {
-                if (hwnd != _taskbarParent || !_enabled || !GetWindowRect(hwnd, out var rect)) return;
+                if (!_enabled || !GetWindowRect(hwnd, out var rect)) return;
+                var tray = FindWindowEx(_taskbarParent, IntPtr.Zero, "TrayNotifyWnd", null);
+                if (hwnd == tray && tray != IntPtr.Zero)
+                {
+                    Dispatcher.BeginInvoke(new Action(() => { _trayCheckedAt = DateTime.MinValue; PositionOnTaskbar(); }));
+                    return;
+                }
+                if (hwnd != _taskbarParent) return;
                 if (rect.Left == _lastNotifiedBar.Left && rect.Top == _lastNotifiedBar.Top
                     && rect.Right == _lastNotifiedBar.Right && rect.Bottom == _lastNotifiedBar.Bottom) return;
                 _lastNotifiedBar = rect;
@@ -101,7 +106,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         _enabled = false;
         _clock.Stop();
         _anchor.Stop();
-        if (IsVisible) Hide();
+        HideIndicator();
     }
 
     public void SetSnapshot(UsageSnapshot snapshot)
@@ -116,6 +121,14 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         PositionOnTaskbar();
     }
 
+    private void HideIndicator()
+    {
+        if (IsVisible) Hide();
+        if (ScreenBounds.IsEmpty) return;
+        ScreenBounds = System.Drawing.Rectangle.Empty;
+        PlacementChanged?.Invoke(ScreenBounds);
+    }
+
     private void PositionOnTaskbar()
     {
         if (!_enabled || _disposed) return;
@@ -124,7 +137,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
             || bar.Right <= bar.Left || bar.Bottom <= bar.Top)
         {
             SavePlacement("taskbar_unavailable");
-            if (IsVisible) Hide();
+            HideIndicator();
             return;
         }
         // A hidden auto-hide taskbar can remain a visible HWND outside the monitor.
@@ -133,9 +146,11 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
             || bar.Left >= screen.Bounds.Right - 2 || bar.Right <= screen.Bounds.Left + 2)
         {
             SavePlacement("taskbar_hidden_or_fullscreen");
-            if (IsVisible) Hide();
+            HideIndicator();
             return;
         }
+        if (_cachedTrayTaskbar != taskbar) { _cachedModernTray = default; _occupied = Array.Empty<int[]>(); _layoutObservedAt = default; }
+        TryGetModernTray(taskbar, out _);
         var tray = FindWindowEx(taskbar, IntPtr.Zero, "TrayNotifyWnd", null);
         RectNative trayBounds;
         if (!(tray != IntPtr.Zero && GetWindowRect(tray, out trayBounds))
@@ -143,7 +158,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         {
             SavePlacement("tray_unavailable");
             // Do not guess a position that could cover the clock or notification icons.
-            if (IsVisible) Hide();
+            HideIndicator();
             return;
         }
         var dpi = GetDpiForWindow(taskbar);
@@ -158,8 +173,19 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         {
             width = Math.Min(wantedWidth, Math.Max(1, trayBounds.Left - bar.Left - gap));
             height = Math.Min(wantedHeight, bar.Bottom - bar.Top);
-            x = trayBounds.Left - gap - width;
             y = bar.Top + (bar.Bottom - bar.Top - height) / 2;
+            if (DateTime.UtcNow - _layoutObservedAt > TimeSpan.FromSeconds(10))
+            {
+                HideIndicator();
+                SavePlacement("layout_pending_or_stale");
+                return;
+            }
+            var plan = TaskbarSpacePlanner.Find(bar.Left, bar.Right, y, y + height, gap, scale,
+                _occupied.Append(new[] { trayBounds.Left, bar.Top, trayBounds.Right, bar.Bottom }), _density);
+            if (plan is null) { HideIndicator(); SavePlacement("no_safe_taskbar_space"); return; }
+            if (_density != plan.Density) { _density = plan.Density; RenderProviders(); }
+            width = plan.Width;
+            x = plan.Left;
         }
         else
         {
@@ -211,11 +237,14 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
     private IntPtr _cachedTrayTaskbar;
     private DateTime _trayCheckedAt;
     private bool _readingTray;
+    private int[][] _occupied = Array.Empty<int[]>();
+    private int _density;
+    private DateTime _layoutObservedAt;
 
     private bool TryGetModernTray(IntPtr taskbar, out RectNative bounds)
     {
         bounds = _cachedModernTray;
-        if (!_readingTray && (taskbar != _cachedTrayTaskbar || DateTime.UtcNow - _trayCheckedAt > TimeSpan.FromMinutes(2)))
+        if (!_readingTray && (taskbar != _cachedTrayTaskbar || DateTime.UtcNow - _trayCheckedAt > TimeSpan.FromSeconds(2)))
         {
             _cachedTrayTaskbar = taskbar;
             _trayCheckedAt = DateTime.UtcNow;
@@ -229,20 +258,15 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         _readingTray = true;
         try
         {
-            using var process = new Process { StartInfo = new ProcessStartInfo(Environment.ProcessPath!, "--tray-geometry")
-            { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
-                RedirectStandardOutput = true, RedirectStandardError = true } };
-            process.Start();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-            try
+            var taskbar = _cachedTrayTaskbar;
+            var layout = await Task.Run(() => TaskbarGeometryProbe.ReadLayout(taskbar));
+            if (layout is not null && taskbar == FindWindow("Shell_TrayWnd", null))
             {
-                var text = await process.StandardOutput.ReadToEndAsync(timeout.Token);
-                await process.WaitForExitAsync(timeout.Token);
-                var rect = JsonSerializer.Deserialize<int[]>(text);
-                if (rect is { Length: 4 } && rect[2] > rect[0] && rect[3] > rect[1])
-                    _cachedModernTray = new RectNative { Left = rect[0], Top = rect[1], Right = rect[2], Bottom = rect[3] };
+                var rect = layout.Tray;
+                _cachedModernTray = new RectNative { Left = rect[0], Top = rect[1], Right = rect[2], Bottom = rect[3] };
+                _occupied = layout.Occupied;
+                _layoutObservedAt = DateTime.UtcNow;
             }
-            catch (OperationCanceledException) { if (!process.HasExited) process.Kill(); }
         }
         catch (Exception) { /* Preserve the last known position on a transient probe failure. */ }
         finally { _readingTray = false; }
@@ -265,7 +289,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         _capsule = capsule;
         capsule.Child = _providerItems;
         capsule.Cursor = System.Windows.Input.Cursors.Hand;
-        capsule.ToolTip = "Kota ve token ayrıntılarını aç";
+        capsule.ToolTip = "Kota ve token ayrıntılarını aç · tekrar tıklayınca kapanır";
         capsule.MouseLeftButtonUp += (_, _) => OpenRequested?.Invoke();
         outer.Children.Add(capsule);
         return outer;
@@ -274,6 +298,14 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
     private void RenderProviders()
     {
         _providerItems.Children.Clear();
+        if (_density == 2)
+        {
+            var button = MakeCapsule("AI", "#282F39", "#D5DEE9");
+            button.ToolTip = _snapshot is null ? "Kota bilgileri yükleniyor…" : string.Join("\n", _snapshot.Providers
+                .OrderBy(provider => ProviderOrder(provider.Id)).Select(CompactSummary));
+            _providerItems.Children.Add(button);
+            return;
+        }
         if (_snapshot is null)
         {
             _providerItems.Children.Add(MakeCapsule("Kota bilgileri yükleniyor…", "#303B49", "#D5DEE9"));
@@ -291,10 +323,10 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
                 BorderBrush = Brush("#3A4553"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = _attached ? new CornerRadius(0, 0, 9, 9) : new CornerRadius(9),
-                Width = 114,
+                Width = _density == 1 ? 32 : 114,
                 Padding = new Thickness(4, 3, 4, 3),
                 Margin = new Thickness(0, 0, provider.Id == providers.Last().Id ? 0 : 4, 0),
-                ToolTip = provider.State == "stale"
+                ToolTip = _density == 1 ? CompactSummary(provider) : provider.State == "stale"
                     ? $"{displayName} · önbellek · son başarılı veri {provider.ObservedAt.ToLocalTime():HH:mm}"
                     : $"{displayName} · {StateText(provider.State)}",
                 Opacity = provider.State == "stale" ? 0.68 : 1
@@ -318,9 +350,9 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
             row.Children.Add(logoTile);
 
             var taskbarWindows = SelectTaskbarWindows(provider);
-            if (taskbarWindows.Count == 0)
+            if (_density == 0 && taskbarWindows.Count == 0)
                 row.Children.Add(MakeCapsule((provider.State == "reauth_required" ? "Giriş" : "—"), "#493D2A", "#F1CF83"));
-            for (var index = 0; index < taskbarWindows.Count; index++)
+            for (var index = 0; index < taskbarWindows.Count && _density == 0; index++)
             {
                 var window = taskbarWindows[index];
                 var remainingValue = window.RemainingPercent ?? (window.UsedPercent is { } used ? 100 - used : null);
@@ -353,6 +385,19 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
             group.Child = row;
             _providerItems.Children.Add(group);
         }
+    }
+
+    private static string CompactSummary(ProviderSnapshot provider)
+    {
+        var name = provider.Id == "gemini" ? "Gemini" : provider.Name;
+        var windows = SelectTaskbarWindows(provider);
+        if (windows.Count == 0) return $"{name}: {StateText(provider.State)}";
+        var values = windows.Select(window =>
+        {
+            var remaining = window.RemainingPercent ?? (window.UsedPercent is { } used ? 100 - used : null);
+            return $"{window.Label}: " + (remaining is { } value ? $"kalan %{Math.Clamp(value, 0, 100):0}" : "veri yok");
+        });
+        return $"{name} · " + string.Join(" · ", values);
     }
 
     private static Border MakeCapsule(string text, string background, string foreground) => new()

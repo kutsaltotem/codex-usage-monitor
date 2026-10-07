@@ -24,6 +24,9 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Windows x64 derlemesi başarısız oldu.'
 }
 
+& dotnet publish (Join-Path $repoRoot 'windows-app\UsageMonitor.Supervisor\UsageMonitor.Supervisor.csproj') --configuration Release --runtime win-x64 --self-contained true --output $publishDirectory
+if ($LASTEXITCODE -ne 0) { throw 'Supervisor derlemesi başarısız oldu.' }
+
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install.ps1'), (Join-Path $PSScriptRoot 'Install.cmd') -Destination $publishDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL.md') -Destination (Join-Path $publishDirectory 'INSTALL.md')
 

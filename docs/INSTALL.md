@@ -45,3 +45,5 @@ Kaldırmadan önce tepsi menüsünden otomatik başlangıcı kapat ve **Çıkı�
 | Claude Desktop girişli ama bağlantı yok | Desktop girişi ve Claude Code abonelik oturumu farklı kaynaklardır |
 
 Windows 11 x64'te doğrulanmış bir önizlemedir. Farklı DPI, otomatik gizlenen görev çubuğu ve Explorer yeniden başlatma sorunlarını ekran görüntüsü ve Windows sürümüyle [Issues](https://github.com/kutsaltotem/codex-usage-monitor/issues) üzerinden bildir. Oturum dosyası, API anahtarı, çerez veya özel sohbet günlüklerini yükleme.
+
+Otomatik başlangıç tercihi Windows Görev Zamanlayıcısı ile kullanıcı oturumuna bağlıdır. Etkinleştirildiğinde küçük UsageMonitorSupervisor başlatıcısı uygulamanın kapanmasını bekler; beklenmedik/nonzero kapanmada1dk sonra yeniden açar. Tepsi menüsünden Çıkış normal0koduyla kapanır; başlatıcı da sona erer, o oturumda yeniden açmaz. Açılış kaydı10sn gecikmeli, pilde açık ve süre sınırı yoktur. Bu güncelleme henüz GitHub sürüm paketine yayımlanmamıştır.

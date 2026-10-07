@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="UsageMonitor.Windows/**/*.cs" />
+    <Compile Remove="UsageMonitor.Supervisor/**/*.cs" />
   </ItemGroup>
 </Project>

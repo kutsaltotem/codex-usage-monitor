@@ -63,6 +63,16 @@ internal static class Probe
                     throw new Exception("Indicator contents are not centered within their capsule.");
             }
             Console.WriteLine("All three indicator contents centered horizontally and vertically.");
+            var density = typeof(TaskbarUsageWindow).GetField("_density", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            var render = typeof(TaskbarUsageWindow).GetMethod("RenderProviders", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            density.SetValue(strip, 1); render.Invoke(strip, null);
+            if (groups.Children.Count != 3 || !groups.Children.OfType<Border>().All(group => group.Width == 32 && !string.IsNullOrWhiteSpace(group.ToolTip?.ToString())))
+                throw new Exception("Compact provider logos lost their tooltip or dimensions.");
+            density.SetValue(strip, 2); render.Invoke(strip, null);
+            if (groups.Children.Count != 1 || !((Border)groups.Children[0]).ToolTip.ToString()!.Contains("Gemini"))
+                throw new Exception("AI compact button lost its provider summary.");
+            Console.WriteLine("Compact logo and AI tooltips: passed.");
+
         }
         var tokenPanel = (ScrollViewer)panel.FindName("TokenPanel");
         ((Grid)panel.FindName("TokenHost")).Visibility = Visibility.Visible;
@@ -74,6 +84,12 @@ internal static class Probe
         if (Math.Abs(panel.ActualHeight - 560) > .1 || Math.Abs((panel.Top + panel.ActualHeight) * scale + 9000) > 1)
             throw new Exception("Taller popup did not retain its bottom anchor.");
         Console.WriteLine("Popup height560; bottom remains attached to indicator, grows upward.");
+        panel.AlignTo(System.Drawing.Rectangle.Empty);
+        if (panel.IsVisible) throw new Exception("Popup stayed open after its indicator lost space.");
+        panel.ShowAttached(new System.Drawing.Rectangle(-10000, -9000, 34, 34));
+        if (panel.Width < 350) throw new Exception("Compact anchor squeezed popup content.");
+        Console.WriteLine("Indicator unavailable hides popup; compact anchor keeps readable width: passed.");
+
         var tokenContent = (StackPanel)panel.FindName("TokenHistoryContent");
         if (tokenContent.Children.Count < 4) throw new Exception("Initial token history blank.");
         panel.Hide(); panel.ShowAttached(new System.Drawing.Rectangle(-10000, -9000, 350, 34));

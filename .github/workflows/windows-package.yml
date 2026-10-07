@@ -22,12 +22,20 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Verify dynamic taskbar layout
+        shell: pwsh
+        run: |
+          dotnet run --project tests/TaskbarSpaceProbe --configuration Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Publish self-contained Windows x64 app
         shell: pwsh
         run: |
           $publishDirectory = Join-Path $env:RUNNER_TEMP 'CodexUsageMonitor'
           $archivePath = Join-Path $env:RUNNER_TEMP 'CodexUsageMonitor-win-x64.zip'
           dotnet publish windows-app/UsageMonitor.Windows/UsageMonitor.Windows.csproj --configuration Release --runtime win-x64 --self-contained true --output $publishDirectory
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish windows-app/UsageMonitor.Supervisor/UsageMonitor.Supervisor.csproj --configuration Release --runtime win-x64 --self-contained true --output $publishDirectory
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item -LiteralPath scripts/Install.ps1, scripts/Install.cmd, docs/INSTALL.md -Destination $publishDirectory
           Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal

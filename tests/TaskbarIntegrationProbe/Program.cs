@@ -13,7 +13,11 @@ Native.GetWindowRect(indicator, out var bar);
 Native.GetWindowRect(taskbar, out var taskbarRect);
 Require(bar.Top >= taskbarRect.Top && bar.Bottom <= taskbarRect.Bottom, "Indicator is outside the taskbar.");
 Native.GetWindowThreadProcessId(indicator, out var indicatorProcess);
-Require(bar.Right - bar.Left == (int)Math.Ceiling(350 * Native.GetDpiForWindow(taskbar) / 96d), "Indicator fixed width changed.");
+var scale = Native.GetDpiForWindow(taskbar) / 96d;
+Require(new[] { 350, 104, 34 }.Any(width => bar.Right - bar.Left == (int)Math.Ceiling(width * scale)), "Indicator has an unknown density width.");
+var tray = Native.FindWindowEx(taskbar, IntPtr.Zero, "TrayNotifyWnd", null);
+if (tray != IntPtr.Zero && Native.GetWindowRect(tray, out var trayBounds))
+    Require(bar.Right <= trayBounds.Left || bar.Left >= trayBounds.Right, "Indicator overlaps the actual system tray.");
 object? popupResult = null;
 if (args.Contains("--popup-closed"))
 {

@@ -62,3 +62,5 @@ dotnet run --project windows-app/UsageMonitor.Windows/UsageMonitor.Windows.cspro
 Paket `artifacts/` altında üretilir. Doğrulama ayrıntıları [Windows test raporunda](WINDOWS-VERIFICATION-20261006.md); görselleri yeniden üretme komutu [görsel notlarında](docs/images/README.md). HTML dosyaları eski, örnek verili tasarım prototipleridir; güncel ürünün yerine geçmez.
 
 Bağımsız bir projedir; OpenAI, Google veya Anthropic tarafından üretilmez ya da onaylanmaz. Marka ve logolar ilgili sahiplerine aittir. Kota yolları sağlayıcıların kararlı herkese açık API sözleşmeleri değildir; değişebilir veya erişim reddedilebilir.
+
+Otomatik başlangıç tercihi Windows Görev Zamanlayıcısı ile kullanıcı oturumuna bağlıdır. Etkinleştirildiğinde küçük UsageMonitorSupervisor başlatıcısı uygulamanın kapanmasını bekler; beklenmedik/nonzero kapanmada1dk sonra yeniden açar. Tepsi menüsünden Çıkış normal0koduyla kapanır; başlatıcı da sona erer, o oturumda yeniden açmaz. Açılış kaydı10sn gecikmeli, pilde açık ve süre sınırı yoktur. Bu güncelleme henüz GitHub sürüm paketine yayımlanmamıştır.
