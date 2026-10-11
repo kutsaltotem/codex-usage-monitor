@@ -25,6 +25,7 @@ public partial class App : System.Windows.Application
     private RegisteredWaitHandle? _showWait;
     private readonly List<HttpClient> _httpClients = new();
     private bool _isShuttingDown;
+    private bool _refreshingFromTray;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -57,7 +58,6 @@ public partial class App : System.Windows.Application
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showRequested,
             (_, _) => Dispatcher.BeginInvoke(new Action(() =>
             {
-                _appBar?.Enable();
                 ShowPopup();
             })), null, Timeout.Infinite, false);
 
@@ -78,6 +78,7 @@ public partial class App : System.Windows.Application
 
         _appBar = new TaskbarUsageWindow();
         _appBar.OpenRequested += TogglePopup;
+        _appBar.RefreshRequested += async () => await RefreshFromTrayAsync();
         _appBar.PlacementChanged += anchor =>
         {
             if (_popup?.IsVisible == true) _popup.AlignTo(anchor);
@@ -256,20 +257,26 @@ public partial class App : System.Windows.Application
                 if (_popup?.IsVisible == false) _appBar?.SetAttached(false);
             };
         }
-        _appBar.Enable();
+        if (_appBarMenuItem?.Checked != false) _appBar.Enable();
         _appBar.SetAttached(true);
         if (_appBar.ScreenBounds.Width > 0)
             _popup.ShowAttached(_appBar.ScreenBounds);
+        else
+            _popup.ShowNearTaskbar();
     }
 
     private async Task RefreshFromTrayAsync()
     {
+        if (_refreshingFromTray) return;
+        _refreshingFromTray = true;
+        _appBar?.SetRefreshing(true);
         try
         {
             if (_syncService is not null) await _syncService.SyncNowAsync();
             if (_tokenHistoryService is not null) await _tokenHistoryService.SyncNowAsync();
         }
         catch (Exception) { _popup?.SetLoadingMessage("Yenileme tamamlanamadı. Son başarılı veri korunuyor."); }
+        finally { _refreshingFromTray = false; _appBar?.SetRefreshing(false); }
     }
 
     private void ToggleAppBar(bool enabled)

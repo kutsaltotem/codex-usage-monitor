@@ -17,6 +17,8 @@ public partial class MainWindow
     private string _quotaProviderFilter = "all";
     private bool _renderingTokenHistory;
     private bool _savingTokenSettings;
+    private bool _tokenControlsExpanded;
+    private string? _tokenSettingsError;
     private IReadOnlyList<QuotaHistoryEntry> _quotaHistory = Array.Empty<QuotaHistoryEntry>();
 
     private void ShowQuotaTab()
@@ -25,9 +27,9 @@ public partial class MainWindow
         if (_snapshot is not null) SetSnapshot(_snapshot, isCached: false);
         TokenPanel.Visibility = Visibility.Collapsed;
         TokenHost.Visibility = Visibility.Collapsed;
-        QuotaTabButton.Background = Brush("#354252");
+        QuotaTabButton.Background = Brush("#344A65");
         QuotaTabButton.Foreground = Brush("#F1F4F8");
-        TokenTabButton.Background = Brush("#222A34");
+        TokenTabButton.Background = Brushes.Transparent;
         TokenTabButton.Foreground = Brush("#AAB5C3");
     }
 
@@ -36,9 +38,9 @@ public partial class MainWindow
         QuotaPanel.Visibility = Visibility.Collapsed;
         TokenPanel.Visibility = Visibility.Visible;
         TokenHost.Visibility = Visibility.Visible;
-        QuotaTabButton.Background = Brush("#222A34");
+        QuotaTabButton.Background = Brushes.Transparent;
         QuotaTabButton.Foreground = Brush("#AAB5C3");
-        TokenTabButton.Background = Brush("#354252");
+        TokenTabButton.Background = Brush("#344A65");
         TokenTabButton.Foreground = Brush("#F1F4F8");
         RenderTokenHistory();
         _ = RefreshTokenHistoryAsync();
@@ -58,6 +60,7 @@ public partial class MainWindow
 
     private async Task RefreshTokenHistoryAsync()
     {
+        if (_previewOnly) return;
         try
         {
             _quotaHistory = await new QuotaSnapshotStore().LoadHistoryAsync();
@@ -109,14 +112,6 @@ public partial class MainWindow
 
             TokenHistoryContent.Children.Add(CreateTokenChartCard(filteredRows));
             TokenHistoryContent.Children.Add(CreateModelDropdown(filteredRows));
-            TokenHistoryContent.Children.Add(new TextBlock
-            {
-                Text = "Tokenlar yerel CLI kayıtlarıdır; abonelik kotası veya fatura değildir.",
-                Foreground = Brush("#8592A1"),
-                FontSize = 9,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(2, 0, 2, 8)
-            });
             TokenHistoryContent.Children.Add(CreateHistoryControls(snapshot));
         }
         finally { _renderingTokenHistory = false; }
@@ -124,35 +119,52 @@ public partial class MainWindow
 
     private UIElement CreateHistoryControls(TokenHistorySnapshot snapshot)
     {
+        var enabled = new[] { snapshot.Settings.CodexEnabled, snapshot.Settings.GeminiEnabled, snapshot.Settings.ClaudeEnabled }.Count(value => value);
+        var header = new Grid();
+        header.ToolTip = "Yeni token kayıtlarının toplanmasını yönet. Kapattığında geçmiş kayıtlar korunur; abonelik kotası ölçümleri devam eder.";
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(new TextBlock { Text = "Token kayıtları", FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var summary = new TextBlock { Text = enabled == 0 ? "Kayıt kapalı" : $"{enabled}/3 açık", FontSize = 10,
+            Foreground = Brush(enabled == 0 ? "#A6B5C8" : "#7ADDB8"), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(summary, 1); header.Children.Add(summary);
+        var controls = new Expander { Header = header, Tag = "TokenHistoryControls", IsExpanded = _tokenControlsExpanded,
+            Foreground = Brush("#EAF0F7"), Margin = new Thickness(0,0,0,8) };
+        controls.Expanded += (_, _) => _tokenControlsExpanded = true;
+        controls.Collapsed += (_, _) => _tokenControlsExpanded = false;
         var card = MakeTokenCard();
-        card.Tag = "TokenHistoryControls";
-        var stack = new StackPanel(); card.Child = stack;
-        stack.Children.Add(new TextBlock { Text = "Token kayıtları", Foreground = Brush("#EDF1F6"), FontSize = 11, FontWeight = FontWeights.SemiBold });
-        stack.Children.Add(new TextBlock { Text = "Yerel CLI sayaçları • konuşma metni kaydedilmez", Foreground = Brush("#AAB5C3"), FontSize = 9, Margin = new Thickness(0,4,0,8) });
-        var providers = new UniformGrid { Columns = 3 };
+        card.Margin = new Thickness(0);
+        var stack = new StackPanel(); card.Child = stack; controls.Content = card;
+        stack.Children.Add(new TextBlock { Text = "Kaydedilecek uygulamalar", Foreground = Brush("#A6B5C8"), FontSize = 10, Margin = new Thickness(0,0,0,6) });
+        var providers = new StackPanel();
         var codex = MakeProviderChoice("Codex", snapshot.Settings.CodexEnabled);
         var gemini = MakeProviderChoice("Gemini CLI", snapshot.Settings.GeminiEnabled);
-        var claude = MakeProviderChoice("Claude", snapshot.Settings.ClaudeEnabled);
+        var claude = MakeProviderChoice("Claude Code", snapshot.Settings.ClaudeEnabled);
         providers.Children.Add(codex); providers.Children.Add(gemini); providers.Children.Add(claude);
         stack.Children.Add(providers);
-        var status = new TextBlock { Text = "Seçimler otomatik kaydedilir", Foreground = Brush("#8592A1"), FontSize = 8, Margin = new Thickness(0,5,0,0) };
+        var status = new TextBlock { Text = _tokenSettingsError, Foreground = Brush("#EF9894"), FontSize = 10,
+            TextWrapping = TextWrapping.Wrap, Visibility = _tokenSettingsError is null ? Visibility.Collapsed : Visibility.Visible,
+            Margin = new Thickness(0,5,0,0) };
         stack.Children.Add(status);
         var retentionDays = snapshot.Settings.RetentionDays;
         async Task SaveAsync()
         {
             if (_savingTokenSettings) return;
             _savingTokenSettings = true;
-            providers.IsEnabled = false; status.Text = "Kaydediliyor…";
+            card.IsEnabled = false; status.Text = "Kaydediliyor…"; status.Visibility = Visibility.Visible;
             try
             {
-                var updated = await _tokenHistoryService.SetProvidersEnabledAsync(codex.IsChecked == true,
-                    gemini.IsChecked == true, claude.IsChecked == true, retentionDays);
+                var updated = _previewOnly
+                    ? snapshot with { Settings = new TokenHistorySettings(codex.IsChecked == true, gemini.IsChecked == true, claude.IsChecked == true, retentionDays) }
+                    : await _tokenHistoryService.SetProvidersEnabledAsync(codex.IsChecked == true,
+                        gemini.IsChecked == true, claude.IsChecked == true, retentionDays);
+                _tokenSettingsError = null;
                 SetTokenHistorySnapshot(updated);
             }
-            catch (Exception) { status.Text = "Kaydedilemedi; yeniden dene"; }
+            catch (Exception) { _tokenSettingsError = "Seçim kaydedilemedi. Yeniden dene."; }
             finally
             {
-                providers.IsEnabled = true;
+                card.IsEnabled = true;
                 _savingTokenSettings = false;
                 if (IsVisible && TokenPanel.Visibility == Visibility.Visible)
                     _ = Dispatcher.InvokeAsync(RenderTokenHistory, System.Windows.Threading.DispatcherPriority.Background);
@@ -163,38 +175,42 @@ public partial class MainWindow
             choice.Checked += async (_, _) => await SaveAsync();
             choice.Unchecked += async (_, _) => await SaveAsync();
         }
-        var options = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0,7,0,0) };
-        var settings = MakeHistoryButton("Saklama ve temizleme ▾", false);
-        settings.Margin = new Thickness(0,7,0,0);
-        settings.Click += (_, _) => options.Visibility = options.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-        stack.Children.Add(settings); stack.Children.Add(options);
-        var periods = new StackPanel { Orientation = Orientation.Horizontal };
+        stack.Children.Add(new TextBlock { Text = "Yalnız sayaçlar · konuşmalar kaydedilmez", Foreground = Brush("#8592A1"), FontSize = 9,
+            Margin = new Thickness(0,3,0,10), ToolTip = "Seçimler otomatik kaydedilir. Codex, Gemini CLI ve Claude Code'un yerel token sayaçları okunur. Bu seçimler abonelik kotası ölçümünü değiştirmez." });
+        stack.Children.Add(new Border { Height = 1, Background = Brush("#2C3C50"), Margin = new Thickness(0,0,0,10) });
+        stack.Children.Add(new TextBlock { Text = "Kayıtları sakla", Foreground = Brush("#A6B5C8"), FontSize = 10, Margin = new Thickness(0,0,0,6) });
+        var periods = new UniformGrid { Columns = 3 };
         foreach (var days in new[] { 30, 90, 365 })
         {
-            var option = MakeFilterButton($"{days} gün", days == retentionDays);
-            option.Margin = new Thickness(0,0,5,0);
+            var option = MakeFilterButton(days == 365 ? "1 yıl" : $"{days} gün", days == retentionDays);
+            option.Margin = new Thickness(0,0,days == 365 ? 0 : 5,0);
             option.Click += async (_, _) => { retentionDays = days; await SaveAsync(); };
             periods.Children.Add(option);
         }
-        options.Children.Add(periods);
-        var clear = MakeHistoryButton("Token geçmişini sil", false); clear.Margin = new Thickness(0,7,0,0);
+        stack.Children.Add(periods);
+        var clear = MakeHistoryButton("Geçmişi temizle", false); clear.Margin = new Thickness(0,10,0,0);
+        clear.Foreground = Brush("#E8A29D"); clear.Background = Brushes.Transparent;
+        clear.BorderBrush = Brush("#57404A");
+        clear.IsEnabled = !_previewOnly;
+        clear.ToolTip = _previewOnly ? "Tasarım önizlemesinde devre dışı" : "Token kayıtlarını siler ve toplamayı kapatır. Kota geçmişi korunur.";
         clear.Click += async (_, _) =>
         {
             var answer = MessageBox.Show(this, "Yerel token geçmişi silinsin ve toplama durdurulsun? Kota ölçümleri korunur.",
                 "Token geçmişi", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
             try { SetTokenHistorySnapshot(await _tokenHistoryService.ClearHistoryAsync()); }
-            catch (Exception) { status.Text = "Geçmiş silinemedi"; }
+            catch (Exception) { status.Text = "Geçmiş silinemedi"; status.Visibility = Visibility.Visible; }
         };
-        options.Children.Add(clear);
-        return card;
+        stack.Children.Add(clear);
+        return controls;
     }
 
     private static CheckBox MakeProviderChoice(string name, bool enabled) => new()
     {
-        Content = name, IsChecked = enabled, FontSize = 9,
-        Foreground = Brush("#E5EBF2"), Margin = new Thickness(0,0,4,0),
-        Style = (Style)Application.Current.FindResource("ProviderChoice")
+        Content = name, IsChecked = enabled, FontSize = 11,
+        Foreground = Brush("#E5EBF2"), Margin = new Thickness(0,0,0,4),
+        ToolTip = name + " yerel token kayıtlarını aç/kapat",
+        Style = (Style)Application.Current.FindResource("TokenProviderSwitch")
     };
 
     private UIElement CreateQuotaHistoryCard()
@@ -208,8 +224,8 @@ public partial class MainWindow
         var legend = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,6,0,0) };
         legend.Children.Add(CreateLegend("Codex", "#37C9A3")); legend.Children.Add(CreateLegend("Gemini", "#829DFF"));
         legend.Children.Add(CreateLegend("Claude", "#E2A078")); stack.Children.Add(legend);
-        stack.Children.Add(new TextBlock { Text = "Kullanılan kota (%) · saatlik ölçümler", Foreground = Brush("#8D99A8"), FontSize = 8, Margin = new Thickness(0,4,0,0) });
-        stack.Children.Add(new TextBlock { Text = "5 saatlik / haftalık limit; 24 saatteki tüketim toplamı değil", Foreground = Brush("#8D99A8"), FontSize = 8, TextWrapping = TextWrapping.Wrap });
+        stack.Children.Add(new TextBlock { Text = "Kullanılan kota · saatlik son ölçüm", Foreground = Brush("#A6B5C8"), FontSize = 10, Margin = new Thickness(0,5,0,4),
+            ToolTip = "5 saatlik veya haftalık limitin kullanılan yüzdesi. Son 24 saatte harcanan toplam değildir. Ölçülmeyen aralıklar birleştirilmez." });
         var chart = new Canvas { Height = 105, Background = Brushes.Transparent };
         chart.SizeChanged += (_, _) => DrawQuotaHistory(chart);
         stack.Children.Add(chart);
@@ -230,18 +246,25 @@ public partial class MainWindow
     {
         chart.Children.Clear();
         if (chart.ActualWidth < 40) return;
-        var hours = _quotaHistory.GroupBy(row => row.GeneratedAt.ToLocalTime().ToString("dd HH"))
-            .OrderBy(group => group.Min(row => row.GeneratedAt)).TakeLast(24).ToArray();
-        if (hours.Length == 0) return;
+        var hours = RecentQuotaHistory(_quotaHistory, DateTimeOffset.UtcNow)
+            .GroupBy(row => row.GeneratedAt.ToLocalTime().ToString("yyyy-MM-dd HH"))
+            .OrderBy(group => group.Min(row => row.GeneratedAt)).ToArray();
+        if (hours.Length == 0)
+        {
+            chart.Children.Add(new TextBlock { Text = "Son 24 saatte ölçüm yok", FontSize = 11, Foreground = Brush("#A6B5C8"), Margin = new Thickness(0,25,0,0) });
+            return;
+        }
         var width = chart.ActualWidth;
         var times = hours.Select(group => group.Min(row => row.GeneratedAt)).ToArray();
         var span = Math.Max(1,(times[^1] - times[0]).TotalSeconds);
-        var positions = times.Select(time => 6 + (time - times[0]).TotalSeconds / span * (width - 12)).ToArray();
+        var positions = times.Select(time => 31 + (time - times[0]).TotalSeconds / span * Math.Max(1, width - 37)).ToArray();
         for (var percent = 0; percent <= 100; percent += 50)
         {
             var y = 85 - percent * .75;
-            chart.Children.Add(new Line { X1 = 0, X2 = width, Y1 = y, Y2 = y,
+            chart.Children.Add(new Line { X1 = 29, X2 = width, Y1 = y, Y2 = y,
                 Stroke = Brush("#35404C"), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 2,3 } });
+            var axis = new TextBlock { Text = $"{percent}%", Foreground = Brush("#94A7BF"), FontSize = 9 };
+            Canvas.SetTop(axis, y - 6); chart.Children.Add(axis);
         }
         foreach (var id in new[] { "chatgpt-codex", "gemini", "claude" })
         {
@@ -252,7 +275,12 @@ public partial class MainWindow
             {
                 var entry = hours[i].Where(row => row.Id == id).MaxBy(row => row.GeneratedAt);
                 var measurement = entry is null ? null : QuotaChartMeasurement(entry);
-                if (measurement is null) continue;
+                if (measurement is null || (i > 0 && times[i] - times[i-1] > TimeSpan.FromHours(2)))
+                {
+                    if (line.Points.Count > 0) chart.Children.Add(line);
+                    line = new Polyline { Stroke = Brush(ProviderAccent(id)), StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Round, IsHitTestVisible = false };
+                    if (measurement is null) continue;
+                }
                 var point = new System.Windows.Point(positions[i], 85 - Math.Clamp(100 - measurement.RemainingPercent!.Value,0,100) * .75);
                 line.Points.Add(point);
                 var dot = new Ellipse { Width = 5, Height = 5, Fill = Brush(ProviderAccent(id)), IsHitTestVisible = false };
@@ -262,7 +290,8 @@ public partial class MainWindow
         }
         for (var i = 0; i < hours.Length; i++)
         {
-            var entries = hours[i].Where(row => _quotaProviderFilter == "all" || row.Id == _quotaProviderFilter).ToArray();
+            var entries = hours[i].Where(row => _quotaProviderFilter == "all" || row.Id == _quotaProviderFilter)
+                .GroupBy(row => row.Id).Select(group => group.MaxBy(row => row.GeneratedAt)!).ToArray();
             var details = new List<string> { hours[i].Max(row => row.GeneratedAt).ToLocalTime().ToString("dd MMM HH:mm", TurkishCulture) };
             foreach (var entry in entries)
             {
@@ -289,6 +318,9 @@ public partial class MainWindow
         }
     }
 
+    public static IReadOnlyList<QuotaHistoryEntry> RecentQuotaHistory(IEnumerable<QuotaHistoryEntry> history, DateTimeOffset now) =>
+        history.Where(entry => entry.GeneratedAt >= now.AddHours(-24) && entry.GeneratedAt <= now).ToArray();
+
     public static UsageWindow? QuotaChartMeasurement(QuotaHistoryEntry entry) => entry.Windows
         .Where(window => window.RemainingPercent.HasValue && !window.Kind.StartsWith("antigravity_", StringComparison.Ordinal))
         .OrderBy(window => window.Kind == "five_hour" ? 0 : window.Kind == "weekly" ? 1 : 2)
@@ -298,9 +330,9 @@ public partial class MainWindow
     {
         var totals = AggregateTokens(rows);
         var grid = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 9) };
-        grid.Children.Add(CreateKpi("TOPLAM TOKEN", FormatCount(totals.Total), "kayıtlardaki toplam", "#37C9A3"));
-        grid.Children.Add(CreateKpi("GİRDİ", FormatCount(totals.Input), "input", "#829DFF"));
-        grid.Children.Add(CreateKpi("ÇIKTI", FormatCount(totals.Output), "output", "#E7B766"));
+        grid.Children.Add(CreateKpi("TOPLAM", CompactCount(totals.Total), FormatCount(totals.Total) + " token", "#37C9A3"));
+        grid.Children.Add(CreateKpi("GİRDİ", CompactCount(totals.Input), FormatCount(totals.Input) + " token", "#829DFF"));
+        grid.Children.Add(CreateKpi("ÇIKTI", CompactCount(totals.Output), FormatCount(totals.Output) + " token", "#E7B766"));
         return grid;
     }
 
@@ -308,20 +340,21 @@ public partial class MainWindow
     {
         var border = new Border
         {
-            Background = Brush("#242B35"),
-            BorderBrush = Brush("#394452"),
+            Background = Brush("#1C2735"),
+            BorderBrush = Brush("#2C3C50"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(9),
             Padding = new Thickness(9, 8, 8, 7),
-            Margin = new Thickness(0, 0, 6, 0)
+            Margin = new Thickness(0, 0, label == "ÇIKTI" ? 0 : 6, 0),
+            ToolTip = detail
         };
         border.Child = new StackPanel
         {
             Children =
             {
                 new TextBlock { Text = label, Foreground = Brush("#AAB5C3"), FontSize = 8, FontWeight = FontWeights.Bold },
-                new TextBlock { Text = value, Foreground = Brush(accent), FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 3, 0, 1), TextTrimming = TextTrimming.CharacterEllipsis },
-                new TextBlock { Text = detail, Foreground = Brush("#8592A1"), FontSize = 8 }
+                new TextBlock { Text = value, Foreground = Brush(accent), FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 3, 0, 1), TextTrimming = TextTrimming.CharacterEllipsis },
+                new TextBlock { Text = "token", Foreground = Brush("#8592A1"), FontSize = 9 }
             }
         };
         return border;
@@ -335,7 +368,8 @@ public partial class MainWindow
         var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.Children.Add(new TextBlock { Text = "Token kullanımı", Foreground = Brush("#EAF0F7"), FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        header.Children.Add(new TextBlock { Text = "Token kullanımı", Foreground = Brush("#EAF0F7"), FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Yerel CLI kayıtlarıdır; abonelik kotası veya fatura değildir." });
         var periods = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var (days, label) in new[] { (7, "7g"), (30, "30g"), (90, "90g"), (365, "1y") })
         {
@@ -535,7 +569,7 @@ public partial class MainWindow
         var dropdown = new Expander
         {
             Header = new TextBlock { Text = "Model dökümü", FontSize = 11, FontWeight = FontWeights.SemiBold },
-            Foreground = Brush("#EAF0F7"), Background = Brush("#242B35"), Margin = new Thickness(0,0,0,8)
+            Foreground = Brush("#EAF0F7"), Background = Brush("#1C2735"), Margin = new Thickness(0,0,0,8)
         };
         dropdown.Expanded += (_,_) => { if (dropdown.Content is null) dropdown.Content = CreateModelBreakdown(rows); };
         dropdown.Collapsed += (_,_) => dropdown.Content = null;
@@ -547,15 +581,6 @@ public partial class MainWindow
         var card = MakeTokenCard();
         var stack = new StackPanel();
         card.Child = stack;
-        stack.Children.Add(new TextBlock
-        {
-            Text = "Model dökümü",
-            Foreground = Brush("#EAF0F7"),
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 7)
-        });
-
         var models = FilterTokenRows(rows)
             .Where(row => row.LocalDate >= DateOnly.FromDateTime(DateTime.Now).AddDays(-(_tokenPeriodDays - 1)))
             .GroupBy(row => (row.ProviderId, row.Model))
@@ -585,7 +610,7 @@ public partial class MainWindow
         {
             var rowBorder = new Border
             {
-                Background = Brush("#1D232C"),
+                Background = Brush("#141E2A"),
                 BorderBrush = Brush("#343E4A"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(7),
@@ -668,6 +693,14 @@ public partial class MainWindow
         return sum;
     }
 
+    public static string CompactCount(long value)
+    {
+        if (value < 1000) return value.ToString("N0", TurkishCulture);
+        if (value < 1_000_000) return (value / 1000d).ToString("0.#", TurkishCulture) + " B";
+        if (value < 1_000_000_000) return (value / 1_000_000d).ToString("0.#", TurkishCulture) + " Mn";
+        return (value / 1_000_000_000d).ToString("0.#", TurkishCulture) + " Mr";
+    }
+
     private static string FormatCount(long value) => value.ToString("N0", TurkishCulture);
 
     private static string FormatCount(double value) => Math.Round(value).ToString("N0", TurkishCulture);
@@ -681,8 +714,8 @@ public partial class MainWindow
 
     private static Border MakeTokenCard() => new()
     {
-        Background = Brush("#242B35"),
-        BorderBrush = Brush("#394452"),
+        Background = Brush("#1C2735"),
+        BorderBrush = Brush("#2C3C50"),
         BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(10),
         Padding = new Thickness(10),
@@ -703,9 +736,9 @@ public partial class MainWindow
     {
         Content = label,
         Style = (Style)Application.Current.FindResource("ActionButton"),
-        FontSize = 8,
-        Padding = new Thickness(6, 4, 6, 4),
-        Background = Brush(selected ? "#354252" : "#202731"),
+        FontSize = 10,
+        Padding = new Thickness(7, 4, 7, 4),
+        Background = Brush(selected ? "#344A65" : "#202731"),
         BorderBrush = Brush(selected ? "#596A7F" : "#38424F"),
         Foreground = Brush(selected ? "#F1F4F8" : "#AAB5C3")
     };

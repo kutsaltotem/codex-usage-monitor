@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using System.Windows.Input;
 using CodexUsageMonitor;
 using Forms = System.Windows.Forms;
 
@@ -26,7 +26,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
     private IntPtr _taskbarParent;
     private Border? _capsule;
     private bool _attached;
-    private static readonly Dictionary<string, BitmapImage> LogoCache = new();
+    private bool _refreshing;
     private bool _enabled;
     private bool _disposed;
     private UsageSnapshot? _snapshot;
@@ -38,6 +38,8 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
     private RectNative _lastNotifiedBar;
 
     public event Action? OpenRequested;
+    public event Action? RefreshRequested;
+    public void SetRefreshing(bool refreshing) { _refreshing = refreshing; Cursor = refreshing ? System.Windows.Input.Cursors.AppStarting : System.Windows.Input.Cursors.Hand; }
     public event Action<System.Drawing.Rectangle>? PlacementChanged;
     public System.Drawing.Rectangle ScreenBounds { get; private set; }
 
@@ -290,7 +292,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         capsule.Child = _providerItems;
         capsule.Cursor = System.Windows.Input.Cursors.Hand;
         capsule.ToolTip = "Kota ve token ayrıntılarını aç · tekrar tıklayınca kapanır";
-        capsule.MouseLeftButtonUp += (_, _) => OpenRequested?.Invoke();
+        capsule.MouseLeftButtonUp += (_, _) => { if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) RefreshRequested?.Invoke(); else OpenRequested?.Invoke(); };
         outer.Children.Add(capsule);
         return outer;
     }
@@ -334,24 +336,25 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
+                Width = _density == 0 ? 102 : double.NaN,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             var logoTile = new Border
             {
-                Background = System.Windows.Media.Brushes.White,
+                Background = System.Windows.Media.Brushes.Transparent,
                 CornerRadius = new CornerRadius(4),
                 Width = 21,
                 Height = 21,
                 VerticalAlignment = VerticalAlignment.Center,
-                Padding = new Thickness(2),
+                Padding = new Thickness(0),
                 Child = CreateLogo(provider.Id)
             };
             row.Children.Add(logoTile);
 
             var taskbarWindows = SelectTaskbarWindows(provider);
             if (_density == 0 && taskbarWindows.Count == 0)
-                row.Children.Add(MakeCapsule((provider.State == "reauth_required" ? "Giriş" : "—"), "#493D2A", "#F1CF83"));
+                row.Children.Add(MakeQuotaValue((provider.State == "reauth_required" ? "Giriş" : "—"), "#493D2A", "#F1CF83", 6));
             for (var index = 0; index < taskbarWindows.Count && _density == 0; index++)
             {
                 var window = taskbarWindows[index];
@@ -367,19 +370,11 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
                 var percentText = remainingValue is { } exactRemaining
                     ? $"%{Math.Round(Math.Clamp(exactRemaining, 0, 100), MidpointRounding.AwayFromZero):0}"
                     : "—";
-                var percentCapsule = MakeCapsule(percentText,
-                    percentTone.Background, percentTone.Foreground);
+                var percentCapsule = MakeQuotaValue(percentText,
+                    percentTone.Background, percentTone.Foreground, index == 0 ? 6 : 5);
                 percentCapsule.ToolTip = $"{window.Label}: kalan kullanım · {reset}";
                 row.Children.Add(percentCapsule);
-                if (index < taskbarWindows.Count - 1)
-                    row.Children.Add(new Border
-                    {
-                        Width = 1,
-                        Height = 15,
-                        Background = Brush("#596474"),
-                        Margin = new Thickness(3, 0, 0, 0),
-                        VerticalAlignment = VerticalAlignment.Center
-                    });
+
             }
 
             group.Child = row;
@@ -400,6 +395,18 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         return $"{name} · " + string.Join(" · ", values);
     }
 
+    // Reserve enough room for %100 so changing quota digits never moves the logo
+    // or the next value. Only spacing changes; the working Border/StackPanel host stays.
+    private static Border MakeQuotaValue(string text, string background, string foreground, double gap)
+    {
+        var pill = MakeCapsule(text, background, foreground);
+        pill.Width = 35;
+        pill.Margin = new Thickness(gap, 0, 0, 0);
+        var label = (TextBlock)pill.Child;
+        label.FontSize = 12;
+        System.Windows.Documents.Typography.SetNumeralAlignment(label, FontNumeralAlignment.Tabular);
+        return pill;
+    }
     private static Border MakeCapsule(string text, string background, string foreground) => new()
     {
         Background = Brush(background),
@@ -421,29 +428,7 @@ public sealed class TaskbarUsageWindow : Window, IDisposable
         }
     };
 
-    private static System.Windows.Controls.Image CreateLogo(string providerId)
-    {
-        var file = providerId switch
-        {
-            "gemini" => "gemini-mark.jpg",
-            "claude" => "claude-mark.jpg",
-            _ => "openai-mark-codex.jpg"
-        };
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", file);
-        LogoCache.TryGetValue(path, out var source);
-        if (source is null && File.Exists(path))
-        {
-            source = new BitmapImage();
-            source.BeginInit();
-            source.DecodePixelWidth = 64;
-            source.UriSource = new System.Uri(path, System.UriKind.Absolute);
-            source.CacheOption = BitmapCacheOption.OnLoad;
-            source.EndInit();
-            source.Freeze();
-            LogoCache[path] = source;
-        }
-        return new System.Windows.Controls.Image { Source = source, Stretch = Stretch.Uniform };
-    }
+    private static System.Windows.Controls.Image CreateLogo(string providerId) => BrandMarks.Create(providerId, 21);
 
     private static string FormatCompactReset(DateTimeOffset? resetAt)
     {

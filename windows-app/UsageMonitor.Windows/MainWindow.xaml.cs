@@ -2,8 +2,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Input;
 using CodexUsageMonitor;
 
 namespace CodexUsageMonitor.Windows;
@@ -14,18 +14,26 @@ public partial class MainWindow : Window
     private readonly TokenHistoryService _tokenHistoryService;
     private UsageSnapshot? _snapshot;
     private bool _refreshing;
+    private readonly bool _previewOnly;
     private readonly List<(TextBlock Label, ProviderSnapshot Provider)> _ageLabels = new();
     private readonly DispatcherTimer _ageClock = new() { Interval = TimeSpan.FromMinutes(1) };
 
     public bool AllowClose { get; set; }
 
-    public MainWindow(UsageSyncService syncService, TokenHistoryService tokenHistoryService)
+    public MainWindow(UsageSyncService syncService, TokenHistoryService tokenHistoryService, bool previewOnly = false)
     {
         InitializeComponent();
+        _previewOnly = previewOnly;
         _syncService = syncService;
         _tokenHistoryService = tokenHistoryService;
         RefreshButton.Click += async (_, _) => await RefreshAsync();
         CloseButton.Click += (_, _) => Hide();
+        PreviewKeyDown += async (_, args) =>
+        {
+            if (args.Key == Key.Escape) { Hide(); args.Handled = true; }
+            else if (args.Key == Key.R && Keyboard.Modifiers == ModifierKeys.Control)
+            { args.Handled = true; await RefreshAsync(); }
+        };
         QuotaTabButton.Click += (_, _) => ShowQuotaTab();
         TokenTabButton.Click += (_, _) => ShowTokenTab();
         Closing += (_, args) =>
@@ -43,6 +51,7 @@ public partial class MainWindow : Window
         SmoothScrolling.Attach(TokenPanel);
         Deactivated += (_, _) =>
         {
+            if (_previewOnly) return;
             // Defer until the click target is known so the strip can still toggle closed.
             Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -86,7 +95,20 @@ public partial class MainWindow : Window
         var screen = System.Windows.Forms.Screen.FromRectangle(anchor).WorkingArea;
         Left = Math.Clamp(anchor.Right / scale - Width, screen.Left / scale,
             Math.Max(screen.Left / scale, screen.Right / scale - Width));
-        Top = anchor.Top / scale - ActualHeight;
+        var availableHeight = (anchor.Top - screen.Top) / scale;
+        if (availableHeight > 0)
+        {
+            MinHeight = Math.Min(320, availableHeight);
+            Height = Math.Min(560, availableHeight);
+        }
+        Top = anchor.Top / scale - Height;
+    }
+
+    // The tray menu/shortcut must remain usable even when the indicator has no safe slot.
+    public void ShowNearTaskbar()
+    {
+        var area = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Control.MousePosition).WorkingArea;
+        ShowAttached(new System.Drawing.Rectangle(Math.Max(area.Left, area.Right - 350), area.Bottom, 350, 1));
     }
 
     public void SetSnapshot(UsageSnapshot snapshot, bool isCached)
@@ -120,6 +142,8 @@ public partial class MainWindow : Window
         _ageLabels.Clear();
         foreach (var provider in snapshot.Providers.OrderBy(ProviderOrder))
             ProviderList.Children.Add(CreateProviderCard(provider));
+        if (ProviderList.Children.OfType<Border>().LastOrDefault() is { } last)
+            last.Margin = new Thickness(0);
     }
 
     public void SetLoadingMessage(string message)
@@ -138,9 +162,10 @@ public partial class MainWindow : Window
 
     private async Task RefreshAsync(bool quiet = false)
     {
-        if (_refreshing) return;
+        if (_refreshing || _previewOnly) return;
         _refreshing = true;
         RefreshButton.IsEnabled = false;
+        RefreshButton.Content = "…";
         if (!quiet || _snapshot is null)
         {
             SyncStatusText.Text = "Kota bilgileri yenileniyor…";
@@ -168,6 +193,8 @@ public partial class MainWindow : Window
         {
             _refreshing = false;
             RefreshButton.IsEnabled = true;
+            RefreshButton.Content = "↻";
+            RefreshButton.ToolTip = SyncStatusText.Text + " · Ctrl+R";
         }
     }
 
@@ -176,12 +203,12 @@ public partial class MainWindow : Window
         var accent = ProviderAccent(provider.Id);
         var card = new Border
         {
-            Background = Brush("#242B35"),
-            BorderBrush = Brush("#394452"),
+            Background = Brush("#1C2735"),
+            BorderBrush = Brush("#2C3C50"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(8),
-            Margin = new Thickness(0, 0, 0, 10)
+            Padding = new Thickness(10),
+            Margin = new Thickness(0, 0, 0, 9)
         };
         var layout = new StackPanel();
         card.Child = layout;
@@ -222,7 +249,7 @@ public partial class MainWindow : Window
             };
             empty.Child = new TextBlock
             {
-                Text = "Kota verisi yok",
+                Text = "Kota bağlantısı bekleniyor",
                 Foreground = Brush(provider.State is "stale" or "partial" ? "#E7C579" : "#AFBAC8"),
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11
@@ -236,8 +263,13 @@ public partial class MainWindow : Window
                 Columns = provider.Windows.Count >= 2 ? 2 : 1,
                 Rows = (int)Math.Ceiling(provider.Windows.Count / (double)(provider.Windows.Count >= 2 ? 2 : 1))
             };
-            foreach (var window in provider.Windows)
-                windowsPanel.Children.Add(CreateQuotaWindow(window, accent, provider.Windows.Count >= 2));
+            for (var index = 0; index < provider.Windows.Count; index++)
+            {
+                var cell = (Border)CreateQuotaWindow(provider.Windows[index], accent, provider.Windows.Count >= 2, index);
+                if (index >= (provider.Windows.Count - 1) / windowsPanel.Columns * windowsPanel.Columns)
+                    cell.Margin = new Thickness(cell.Margin.Left, 0, cell.Margin.Right, 0);
+                windowsPanel.Children.Add(cell);
+            }
             layout.Children.Add(windowsPanel);
         }
 
@@ -301,16 +333,16 @@ public partial class MainWindow : Window
             (provider.ObservedAt == default ? "" : $"\nSon ölçüm: {provider.ObservedAt.ToLocalTime():dd MMM HH:mm}");
     }
 
-    private UIElement CreateQuotaWindow(UsageWindow window, string accent, bool compact)
+    private UIElement CreateQuotaWindow(UsageWindow window, string accent, bool compact, int index)
     {
         var cell = new Border
         {
-            Background = Brush("#1D232C"),
-            BorderBrush = Brush("#343E4A"),
+            Background = Brush("#141E2A"),
+            BorderBrush = Brush("#26364A"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(9),
-            Margin = new Thickness(0, 0, compact ? 7 : 0, 7)
+            Padding = new Thickness(10, 9, 10, 9),
+            Margin = new Thickness(compact && index % 2 == 1 ? 4 : 0, 0, compact && index % 2 == 0 ? 4 : 0, 6)
         };
         var panel = new StackPanel();
         cell.Child = panel;
@@ -343,12 +375,12 @@ public partial class MainWindow : Window
         var value = new TextBlock
         {
             Text = remainingValue is { } exactRemaining
-                ? $"Kalan %{Math.Round(Math.Clamp(exactRemaining, 0, 100), MidpointRounding.AwayFromZero):0}"
-                : "Kalan veri yok",
+                ? $"%{Math.Round(Math.Clamp(exactRemaining, 0, 100), MidpointRounding.AwayFromZero):0} kalan"
+                : "Ölçüm yok",
             Foreground = Brush("#EEF2F7"),
-            FontSize = 11,
+            FontSize = 18,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 5, 0, 5)
+            Margin = new Thickness(0, 5, 0, 7)
         };
         panel.Children.Add(value);
 
@@ -370,7 +402,7 @@ public partial class MainWindow : Window
         track.SizeChanged += (_, _) => fill.Width = track.ActualWidth * remaining / 100;
         panel.Children.Add(track);
         reset.Margin = new Thickness(0, 4, 0, 0);
-        reset.FontSize = 8;
+        reset.FontSize = 9;
         panel.Children.Add(reset);
         return cell;
     }
@@ -394,16 +426,16 @@ public partial class MainWindow : Window
             "ok" => (FormatAge(observedAt, DateTimeOffset.UtcNow), "#7ADDB8", "#203B35"),
             "partial" => (FormatAge(observedAt, DateTimeOffset.UtcNow), "#EBC66F", "#3E3422"),
             "stale" => ("Eski · " + FormatAge(observedAt, DateTimeOffset.UtcNow), "#EBC66F", "#3E3422"),
-            "reauth_required" => ("GİRİŞ GEREKLİ", "#F0B56B", "#403325"),
-            "not_installed" or "not_signed_in" => ("BAĞLANTI YOK", "#B4BFCC", "#333C48"),
-            "forbidden" => ("ERİŞİM YOK", "#EF9894", "#432D32"),
-            _ => ("ERİŞİLEMİYOR", "#EF9894", "#432D32")
+            "reauth_required" => ("Giriş gerekli", "#F0B56B", "#403325"),
+            "not_installed" or "not_signed_in" => ("Bağlantı yok", "#B4BFCC", "#333C48"),
+            "forbidden" => ("Erişim yok", "#EF9894", "#432D32"),
+            _ => ("Erişilemiyor", "#EF9894", "#432D32")
         };
-        var ageLabel = new TextBlock { Text = text, Foreground = Brush(foreground), FontSize = 8, FontWeight = FontWeights.SemiBold };
+        var ageLabel = new TextBlock { Text = text, Foreground = Brush(foreground), FontSize = 9, FontWeight = FontWeights.SemiBold };
         if (state is "ok" or "partial" or "stale") _ageLabels.Add((ageLabel, provider));
         return new Border
         {
-            ToolTip = $"Son başarılı ölçüm: {observedAt.ToLocalTime():dd MMM HH:mm:ss}",
+            ToolTip = observedAt == default ? "Henüz başarılı ölçüm yok" : $"Son başarılı ölçüm: {observedAt.ToLocalTime():dd MMM HH:mm:ss}",
             Background = Brush(background),
             CornerRadius = new CornerRadius(5),
             Padding = new Thickness(7, 4, 7, 4),
@@ -433,43 +465,7 @@ public partial class MainWindow : Window
         return panel;
     }
 
-    private System.Windows.Controls.Image CreateLogo(string providerId, double size)
-    {
-        var file = LogoFile(providerId);
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", file);
-        var image = new System.Windows.Controls.Image
-        {
-            Width = size,
-            Height = size,
-            Stretch = Stretch.Uniform,
-            Source = LoadImage(path)
-        };
-        return image;
-    }
-
-    private static readonly Dictionary<string, BitmapImage> LogoCache = new();
-
-    private static BitmapImage? LoadImage(string path)
-    {
-        if (LogoCache.TryGetValue(path, out var cached)) return cached;
-        if (!File.Exists(path)) return null;
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.DecodePixelWidth = 64;
-        bitmap.UriSource = new Uri(path, UriKind.Absolute);
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.EndInit();
-        bitmap.Freeze();
-        LogoCache[path] = bitmap;
-        return bitmap;
-    }
-
-    private static string LogoFile(string id) => id switch
-    {
-        "gemini" => "gemini-mark.jpg",
-        "claude" => "claude-mark.jpg",
-        _ => "openai-mark-codex.jpg"
-    };
+    private static System.Windows.Controls.Image CreateLogo(string providerId, double size) => BrandMarks.Create(providerId, size);
 
     private static int ProviderOrder(ProviderSnapshot provider) => provider.Id switch
     {
@@ -532,5 +528,13 @@ public partial class MainWindow : Window
         _ => "Kota verisi şu anda alınamadı. Biraz sonra yeniden deneyin."
     };
 
-    private static SolidColorBrush Brush(string color) => new((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
+    private static readonly Dictionary<string, SolidColorBrush> BrushCache = new();
+    private static SolidColorBrush Brush(string color)
+    {
+        if (BrushCache.TryGetValue(color, out var cached)) return cached;
+        var brush = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
+        brush.Freeze();
+        BrushCache[color] = brush;
+        return brush;
+    }
 }

@@ -1,6 +1,8 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using System.Windows.Markup;
 using System.Xml.Linq;
@@ -38,41 +40,90 @@ internal static class Probe
         if (viewer.CanContentScroll || viewer.IsDeferredScrollingEnabled || Math.Abs(viewer.VerticalOffset - 17) > 0.1)
             throw new Exception($"Pixel scrolling failed: offset={viewer.VerticalOffset}, logical={viewer.CanContentScroll}");
         Console.WriteLine($"Pixel scrolling passed: offset={viewer.VerticalOffset}; card height41, no whole-card jump.");
+        var historyNow = DateTimeOffset.UtcNow;
+        var historyFixture = new[] { new QuotaHistoryEntry(historyNow.AddHours(-25), "gemini", Array.Empty<UsageWindow>()),
+            new QuotaHistoryEntry(historyNow.AddHours(-2), "gemini", Array.Empty<UsageWindow>()),
+            new QuotaHistoryEntry(historyNow.AddHours(1), "gemini", Array.Empty<UsageWindow>()) };
+        if (MainWindow.RecentQuotaHistory(historyFixture, historyNow).Count != 1)
+            throw new Exception("24-hour quota history includes old or future records.");
+        if (MainWindow.CompactCount(1_200_000) != "1,2 Mn" || MainWindow.CompactCount(500) != "500")
+            throw new Exception("Readable token formatting failed.");
+        Console.WriteLine("24-hour quota boundary and compact token formatting: passed.");
         host.Content = null; quotaGrid.Children.Add(viewer);
         if (MainWindow.FormatAge(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow) != "1 dakika önce")
             throw new Exception("Relative age failed.");
         using (var strip = new TaskbarUsageWindow())
         {
             strip.Left = -12000; strip.Top = -12000; strip.Width = 350;
-            strip.SetSnapshot(new UsageSnapshot(DateTimeOffset.UtcNow, new[] { "chatgpt-codex", "gemini", "claude" }
-                .Select(id => new ProviderSnapshot(id, id, "ok", null, DateTimeOffset.UtcNow, "fixture", Array.Empty<UsageWindow>())).ToArray()));
+            var indicatorStamp = DateTimeOffset.UtcNow.AddMinutes(-5);
+            var providers = new[] { "chatgpt-codex", "gemini", "claude" }.Select(id =>
+                new ProviderSnapshot(id, id, "ok", null, indicatorStamp, "fixture", new[] {
+                    new UsageWindow("five_hour", "5 saat", 0, 100, indicatorStamp.AddHours(5)),
+                    new UsageWindow("weekly", "Hafta", 0, 100, indicatorStamp.AddDays(7)) })).ToArray();
+            strip.SetSnapshot(new UsageSnapshot(indicatorStamp, providers));
             strip.Show(); strip.UpdateLayout();
-            var outer = (Grid)strip.Content; var capsule = (Border)outer.Children[0];
+            var outer = (Grid)strip.Content;
+            var capsule = (Border)outer.Children[0];
             var groups = (StackPanel)capsule.Child;
-            var first = (Border)groups.Children[0]; var last = (Border)groups.Children[2];
-            var start = first.TranslatePoint(new Point(), strip); var end = last.TranslatePoint(new Point(last.ActualWidth,0), strip);
-            if (Math.Abs(start.X) > .1 || Math.Abs(start.Y) > .1 || Math.Abs(end.X - 350) > .1)
-                throw new Exception($"Capsule/popup edges differ: {start}/{end}");
-            Console.WriteLine("Capsule geometry: first edge0, top0, final edge350; no inset gap.");
+            if (!strip.AllowsTransparency || outer.Background is not System.Windows.Media.SolidColorBrush { Color.A: 0 })
+                throw new Exception("Taskbar must retain its known working layered WPF host and transparent gaps.");
+            if (groups.Children.Count != 3) throw new Exception("Missing provider capsule.");
             foreach (var group in groups.Children.OfType<Border>())
             {
                 var row = (StackPanel)group.Child;
-                var origin = row.TranslatePoint(new Point(),group);
-                if (Math.Abs(origin.X + row.ActualWidth / 2 - group.ActualWidth / 2) > .6 ||
-                    Math.Abs(origin.Y + row.ActualHeight / 2 - group.ActualHeight / 2) > .6)
-                    throw new Exception("Indicator contents are not centered within their capsule.");
+                if (Descendants(row).OfType<TextBlock>().Count(text => text.Text == "%100") != 2)
+                    throw new Exception("Provider lost one maximum-width percentage value.");
+                var logo = Descendants(row).OfType<System.Windows.Controls.Image>().Single();
+                if (logo.Source is not System.Windows.Media.DrawingImage { IsFrozen: true })
+                    throw new Exception("Taskbar logos must reuse frozen brand drawings.");
             }
-            Console.WriteLine("All three indicator contents centered horizontally and vertically.");
+            foreach (var group in groups.Children.OfType<Border>())
+            {
+                var row = (StackPanel)group.Child;
+                var logo = (Border)row.Children[0];
+                var pills = row.Children.OfType<Border>().Skip(1).ToArray();
+                var positions = pills.Select(pill => pill.TranslatePoint(new Point(), row).X).ToArray();
+                foreach (var sample in new[] { "%0", "%1", "%9", "%10", "%99", "%100" })
+                {
+                    foreach (var pill in pills) ((TextBlock)pill.Child).Text = sample;
+                    strip.UpdateLayout();
+                    for (var index=0; index<pills.Length; index++)
+                    {
+                        var pill = pills[index];
+                        var text = (TextBlock)pill.Child;
+                        if (Math.Abs(pill.ActualWidth - 35) > .1 ||
+                            text.DesiredSize.Width > pill.ActualWidth - pill.Padding.Left - pill.Padding.Right + .1 ||
+                            Math.Abs(pill.TranslatePoint(new Point(), row).X - positions[index]) > .1)
+                            throw new Exception($"Quota spacing moved or clipped for {sample}.");
+                    }
+                }
+                var logoEnd = logo.TranslatePoint(new Point(logo.ActualWidth, 0),row).X;
+                if (Math.Abs(positions[0]-logoEnd-6) > .1 || Math.Abs(positions[1]-positions[0]-35-5) > .1 ||
+                    row.ActualWidth > group.ActualWidth-group.Padding.Left-group.Padding.Right-group.BorderThickness.Left-group.BorderThickness.Right+.1)
+                    throw new Exception("Logo/value gaps or fixed capsule footprint are inconsistent.");
+            }
+            Console.WriteLine("Quota spacing: %0/%1/%9/%10/%99/%100 fit fixed35-DIP pills; logo6-DIP/value5-DIP gaps and positions remain stable.");
+            var requests = 0;
+            strip.OpenRequested += () => requests++;
+            capsule.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0,
+                System.Windows.Input.MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+            if (requests != 1) throw new Exception("One capsule release must dispatch one popup toggle.");
+            foreach (var attached in new[] { true, false })
+            {
+                strip.SetAttached(attached); strip.UpdateLayout();
+                if (Math.Abs(strip.ActualWidth - 350) > .1 || Math.Abs(groups.ActualWidth - 350) > .1)
+                    throw new Exception("Opening/closing the popup changed the350-DIP footprint.");
+            }
             var density = typeof(TaskbarUsageWindow).GetField("_density", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
             var render = typeof(TaskbarUsageWindow).GetMethod("RenderProviders", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-            density.SetValue(strip, 1); render.Invoke(strip, null);
-            if (groups.Children.Count != 3 || !groups.Children.OfType<Border>().All(group => group.Width == 32 && !string.IsNullOrWhiteSpace(group.ToolTip?.ToString())))
-                throw new Exception("Compact provider logos lost their tooltip or dimensions.");
-            density.SetValue(strip, 2); render.Invoke(strip, null);
-            if (groups.Children.Count != 1 || !((Border)groups.Children[0]).ToolTip.ToString()!.Contains("Gemini"))
-                throw new Exception("AI compact button lost its provider summary.");
-            Console.WriteLine("Compact logo and AI tooltips: passed.");
-
+            foreach (var compact in new[] { 1, 2 })
+            {
+                density.SetValue(strip, compact);
+                strip.Width = compact == 1 ? 104 : 34;
+                render.Invoke(strip, null); strip.UpdateLayout();
+                if (groups.Children.Count != (compact == 1 ? 3 : 1)) throw new Exception("Compact provider count incorrect.");
+            }
+            Console.WriteLine("Restored taskbar: layered host, transparent gaps, three provider quota pairs, shared logos, one-click dispatch and fixed popup footprint passed.");
         }
         var tokenPanel = (ScrollViewer)panel.FindName("TokenPanel");
         ((Grid)panel.FindName("TokenHost")).Visibility = Visibility.Visible;
@@ -138,7 +189,10 @@ internal static class Probe
         tokenPanel.ScrollToVerticalOffset(120); panel.UpdateLayout();
         if (summaryHost.Children.Count != 1 || Math.Abs(summaryHost.TranslatePoint(new Point(),panel).Y - pinnedY) > .1 || tokenPanel.VerticalOffset < 1)
             throw new Exception("Token summary did not stay pinned while history scrolled.");
-        var dropdown = Descendants(tokenContent).OfType<Expander>().Single();
+        var controlsExpander = Descendants(tokenContent).OfType<Expander>().Single(control => Equals(control.Tag,"TokenHistoryControls"));
+        if (controlsExpander.IsExpanded) throw new Exception("Token settings must initially collapse to a single summary row.");
+        controlsExpander.IsExpanded = true;
+        var dropdown = Descendants(tokenContent).OfType<Expander>().Single(control => !Equals(control.Tag,"TokenHistoryControls"));
         if (dropdown.IsExpanded || dropdown.Content is not null) throw new Exception("Models must initially be collapsed and unloaded.");
         dropdown.IsExpanded = true;
         if (!Descendants(dropdown).OfType<TextBlock>().Any(text => text.Text == "model24")) throw new Exception("Expanded model list truncated after12.");
@@ -158,7 +212,7 @@ internal static class Probe
             panel.SetTokenHistorySnapshot(new TokenHistorySnapshot(DateTimeOffset.UtcNow, new TokenHistorySettings(false,false), Array.Empty<TokenUsageRow>()));
             var published = new TaskCompletionSource();
             tokenService.SnapshotUpdated += snapshot => { panel.SetTokenHistorySnapshot(snapshot); published.TrySetResult(); };
-            var claudeChoice = Descendants(tokenContent).OfType<CheckBox>().Single(choice => Equals(choice.Content, "Claude"));
+            var claudeChoice = Descendants(tokenContent).OfType<CheckBox>().Single(choice => Equals(choice.Content, "Claude Code"));
             claudeChoice.IsChecked = true;
             var frame = new DispatcherFrame();
             var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
@@ -167,9 +221,10 @@ internal static class Probe
             timeout.Start(); Dispatcher.PushFrame(frame); timeout.Stop();
             Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Background);
             if (!published.Task.IsCompleted || !tokenService.Settings.ClaudeEnabled || tokenContent.Children.Count < 3 ||
-                !Descendants(tokenContent).OfType<CheckBox>().Single(choice => Equals(choice.Content, "Claude")).IsChecked.GetValueOrDefault())
+                !Descendants(tokenContent).OfType<CheckBox>().Single(choice => Equals(choice.Content, "Claude Code")).IsChecked.GetValueOrDefault() ||
+                !Descendants(tokenContent).OfType<Expander>().Single(control => Equals(control.Tag,"TokenHistoryControls")).IsExpanded)
                 throw new Exception("Claude opt-in publication cleared the view or lost its selection.");
-            Console.WriteLine("Claude opt-in checkbox + snapshot publication: content and enabled selection preserved.");
+            Console.WriteLine("Claude opt-in + snapshot publication: content, enabled selection and expanded settings preserved.");
         }
         finally
         {
@@ -191,4 +246,3 @@ internal static class Probe
             foreach (var descendant in Descendants(child)) yield return descendant;
     }
 }
-
