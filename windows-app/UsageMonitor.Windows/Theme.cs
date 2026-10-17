@@ -33,7 +33,7 @@ public static class Theme
     ];
 
     private static readonly Dictionary<(bool Light, string Hex, bool Accent), SolidColorBrush> Cache = new();
-    private static AppThemeMode _mode = AppThemeMode.System;
+    private static AppThemeMode _mode = AppThemeMode.Dark; // dark by default; light is opt-in
 
     public static AppThemeMode Mode => _mode;
     public static bool IsLight { get; private set; }

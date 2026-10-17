@@ -6,7 +6,8 @@
 - Claude: plan rozeti (Pro / Max 5x…), ek kullanım penceresi ve haftalık dağılım satırı (Claude Code / Sohbet / Cowork).
 - Panelde uyarı penceresinde "Claude Code girişini aç" ve "Antigravity'yi aç" düğmeleri; açıklayıcı oturum iletileri.
 - Plan rozeti tüm sağlayıcı kartlarında (ör. Codex Plus).
-- Açık tema: Sistemi izle / Koyu / Açık (tepsi menüsü → Tema). Görev çubuğu kapsülleri değişmez.
+- Açık tema: varsayılan koyu; panel başlığındaki ☀/☾ simgesiyle ya da tepsi menüsü → Tema ile açılır.
+- Gemini planı: Antigravity yerel servisinden (varsa) okunur. Görev çubuğu kapsülleri değişmez.
 - Sıfırlanma bildirimi: en az %50 kullanılmış bir pencere sıfırlanınca tepsi bildirimi (tepsi menüsünden kapatılabilir).
 - Tepsi menüsü → "Geçmişi CSV olarak dışa aktar…": kota geçmişi ve (açıksa) token sayaçları, Excel uyumlu UTF-8.
 

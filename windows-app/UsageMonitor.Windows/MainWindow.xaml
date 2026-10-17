@@ -19,6 +19,9 @@
         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
         <TextBlock Text="Süper Zeka Kullanımı" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
         <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button x:Name="ThemeButton" Content="☀" Width="30" Height="30" Padding="0" Margin="0,0,4,0"
+                  ToolTip="Aydınlık temaya geç" AutomationProperties.Name="Aydınlık ve koyu tema arasında geçiş" AutomationProperties.AutomationId="ThemeToggle"
+                  FontSize="15" Style="{StaticResource ActionButton}" />
           <Button x:Name="RefreshButton" Content="↻" Width="30" Height="30" Padding="0" Margin="0,0,4,0"
                   ToolTip="Yenile · Ctrl+R" AutomationProperties.Name="Kota bilgilerini yenile" FontSize="19" Style="{StaticResource ActionButton}" />
           <Button x:Name="CloseButton" Content="×" Width="30" Height="30" Padding="0"

@@ -30,6 +30,8 @@ public partial class MainWindow : Window
         _syncService = syncService;
         _tokenHistoryService = tokenHistoryService;
         RefreshButton.Click += async (_, _) => await RefreshAsync();
+        ThemeButton.Click += (_, _) => Theme.SetMode(Theme.IsLight ? AppThemeMode.Dark : AppThemeMode.Light);
+        UpdateThemeButton();
         CloseButton.Click += (_, _) => Hide();
         PreviewKeyDown += async (_, args) =>
         {
@@ -71,9 +73,16 @@ public partial class MainWindow : Window
         Unloaded += (_, _) => Theme.Changed -= RepaintForTheme;
     }
 
+    private void UpdateThemeButton()
+    {
+        ThemeButton.Content = Theme.IsLight ? "☾" : "☀";
+        ThemeButton.ToolTip = Theme.IsLight ? "Koyu temaya geç" : "Aydınlık temaya geç";
+    }
+
     private void RepaintForTheme()
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.InvokeAsync(RepaintForTheme); return; }
+        UpdateThemeButton();
         if (TokenPanel.Visibility == Visibility.Visible) ShowTokenTab();
         else ShowQuotaTab();
         if (_snapshot is null) ProviderList.Children.Clear();

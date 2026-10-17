@@ -248,6 +248,7 @@ public partial class App : System.Windows.Application
             themeItems[mode] = item;
             themeMenu.DropDownItems.Add(item);
         }
+        Theme.Changed += () => { foreach (var (other, otherItem) in themeItems) otherItem.Checked = Theme.Mode == other; };
         menu.Items.Add(themeMenu);
 
         var exportItem = new Forms.ToolStripMenuItem("Geçmişi CSV olarak dışa aktar…");

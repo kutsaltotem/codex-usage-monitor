@@ -64,7 +64,8 @@ public static class AntigravityLocalQuota
                             await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
                             using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
                             var windows = Parse(json.RootElement);
-                            if (windows.Count > 0) return new ProviderSnapshot("gemini", "Gemini", "ok", null,
+                            if (windows.Count > 0) return new ProviderSnapshot("gemini", "Gemini", "ok",
+                                await TryReadPlanAsync(candidate, csrf, cancellationToken),
                                 DateTimeOffset.UtcNow, "Antigravity · yerel kota servisi", windows);
                         }
                         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException && !cancellationToken.IsCancellationRequested) { }
@@ -73,6 +74,39 @@ public static class AntigravityLocalQuota
                 catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException or InvalidOperationException) { }
             }
         }
+        return null;
+    }
+
+    // Best effort: the plan name is optional, so any failure just leaves the plan badge off.
+    private static async Task<string?> TryReadPlanAsync(int port, string csrf, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                $"https://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus");
+            request.Headers.Add("X-Codeium-Csrf-Token", csrf);
+            request.Headers.Add("Connect-Protocol-Version", "1");
+            request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode) return null;
+            await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
+            return FindPlan(json.RootElement, 0);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException && !cancellationToken.IsCancellationRequested) { return null; }
+    }
+
+    internal static string? FindPlan(JsonElement element, int depth)
+    {
+        if (depth > 6 || element.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in new[] { "planName", "tierName" })
+            if (element.TryGetProperty(name, out var direct) && direct.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(direct.GetString()))
+                return direct.GetString();
+        if (element.TryGetProperty("userTier", out var tier) && tier.ValueKind == JsonValueKind.Object
+            && CodexQuotaConnector.String(tier, "name") is { Length: > 0 } tierName)
+            return tierName;
+        foreach (var property in element.EnumerateObject())
+            if (FindPlan(property.Value, depth + 1) is { } nested) return nested;
         return null;
     }
 
