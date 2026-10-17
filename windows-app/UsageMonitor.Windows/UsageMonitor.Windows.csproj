@@ -11,13 +11,14 @@
     <ApplicationIcon>..\..\assets\usage-monitor.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>CodexUsageMonitor</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Product>AI Usage Bar</Product>
     <RootNamespace>CodexUsageMonitor.Windows</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <Content Include="..\..\assets\usage-monitor.ico" Link="Assets\usage-monitor.ico" CopyToOutputDirectory="PreserveNewest" />
+    <InternalsVisibleTo Include="ReleaseFeaturesProbe" />
     <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
     <ProjectReference Include="..\UsageMonitor.Core.csproj" />
     <Content Include="..\..\assets\vector\LICENSE-LobeHub.txt" Link="Assets\LICENSE-LobeHub.txt" CopyToOutputDirectory="PreserveNewest" />

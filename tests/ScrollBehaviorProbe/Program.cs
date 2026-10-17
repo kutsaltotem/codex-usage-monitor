@@ -131,6 +131,38 @@ internal static class Probe
         panel.SetTokenHistorySnapshot(new TokenHistorySnapshot(DateTimeOffset.UtcNow,
             new TokenHistorySettings(false, true), new[] { new TokenUsageRow("gemini", DateOnly.FromDateTime(DateTime.Now), "test", 10,20,0,0,0,0,30) }));
         panel.ShowAttached(new System.Drawing.Rectangle(-10000, -9000, 350, 34));
+        var launchStamp = DateTimeOffset.UtcNow;
+        var launchSnapshot = new UsageSnapshot(launchStamp, new[] { "chatgpt-codex", "gemini", "claude" }.Select(id =>
+            new ProviderSnapshot(id, id, "ok", null, launchStamp, "fixture", Array.Empty<UsageWindow>())).ToArray());
+        panel.SetSnapshot(launchSnapshot, false);
+        var launchEvents = new List<ProviderAppTarget>();
+        panel.AppLaunchRequested += target => launchEvents.Add(target);
+        var launchIds = new[] { "Launch.Logo.ChatGPT", "Launch.Name.Codex", "Launch.Logo.Gemini",
+            "Launch.Name.Antigravity", "Launch.Logo.Claude", "Launch.Name.Claude" };
+        var launchTargets = new[] { ProviderAppTarget.ChatGPT, ProviderAppTarget.Codex, ProviderAppTarget.Gemini,
+            ProviderAppTarget.Antigravity, ProviderAppTarget.Claude, ProviderAppTarget.Claude };
+        for (var index=0; index<launchIds.Length; index++)
+        {
+            var link = Descendants(panel).OfType<Button>().Single(button =>
+                System.Windows.Automation.AutomationProperties.GetAutomationId(button) == launchIds[index]);
+            if (string.IsNullOrWhiteSpace(System.Windows.Automation.AutomationProperties.GetName(link)) ||
+                !link.Focusable || link.ToolTip is not string tooltip || !tooltip.Contains(launchTargets[index].ToString()))
+                throw new Exception("App link must name its actual target and support keyboard focus.");
+            var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(link);
+            if (peer?.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke) is not System.Windows.Automation.Provider.IInvokeProvider)
+                throw new Exception("App link has no accessible Invoke action.");
+            link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            if (launchEvents.Count != index+1 || launchEvents[index] != launchTargets[index])
+                throw new Exception("Logo/name link dispatched the wrong app or dispatched twice.");
+        }
+        typeof(MainWindow).GetMethod("ShowLaunchError", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(panel, new object[] { ProviderAppTarget.Gemini, "Synthetic missing app" });
+        if (Descendants(panel).OfType<TextBlock>().Count(text => Equals(text.Tag,"AppLaunchError") && text.Visibility == Visibility.Visible) != 1)
+            throw new Exception("Launch errors must remain inline in one provider card.");
+        panel.SetSnapshot(launchSnapshot, false);
+        if (((System.Collections.IDictionary)typeof(MainWindow).GetField("_launchErrors", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(panel)!).Count != 5)
+            throw new Exception("Provider launch errors leaked across quota refresh.");
+        Console.WriteLine("Provider launch links: six distinct logo/name mappings, one request per click, accessible Invoke and inline errors passed; no apps launched in tests.");
         var scale = PresentationSource.FromVisual(panel)!.CompositionTarget!.TransformToDevice.M11;
         if (Math.Abs(panel.ActualHeight - 560) > .1 || Math.Abs((panel.Top + panel.ActualHeight) * scale + 9000) > 1)
             throw new Exception("Taller popup did not retain its bottom anchor.");

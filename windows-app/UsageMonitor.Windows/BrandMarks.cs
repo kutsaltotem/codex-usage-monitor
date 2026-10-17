@@ -18,6 +18,18 @@ internal static class BrandMarks
     private static readonly ImageSource Gemini = Build(GeminiPath, "#3186FF", true);
     private static readonly ImageSource Claude = Build(ClaudePath, "#E9A27D", false);
 
+    private static readonly ImageSource OpenAiLight = Build(OpenAiPath, "#14171C", false);
+    private static readonly ImageSource ClaudeLight = Build(ClaudePath, "#D97757", false);
+
+    /// <summary>Popup logos follow the theme; the taskbar capsules keep using the dark-surface marks via Create.</summary>
+    internal static Image CreateThemed(string id, double size)
+    {
+        var image = Create(id, size);
+        if (Theme.IsLight)
+            image.Source = id == "gemini" ? Gemini : id == "claude" ? ClaudeLight : OpenAiLight;
+        return image;
+    }
+
     internal static Image Create(string id, double size) => new()
     {
         Source = id == "gemini" ? Gemini : id == "claude" ? Claude : OpenAi,

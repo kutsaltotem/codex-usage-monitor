@@ -12,6 +12,8 @@ public partial class App : System.Windows.Application
     private UsageSyncService? _syncService;
     private TokenHistoryService? _tokenHistoryService;
     private readonly LowQuotaNotificationPolicy _notificationPolicy = new();
+    private readonly ResetNotificationPolicy _resetPolicy = new();
+    private QuotaSnapshotStore? _store;
     private MainWindow? _popup;
     private UsageSnapshot? _latestSnapshot;
     private TokenHistorySnapshot? _latestTokenSnapshot;
@@ -61,7 +63,10 @@ public partial class App : System.Windows.Application
                 ShowPopup();
             })), null, Timeout.Infinite, false);
 
+        Theme.Load();
+        Theme.Apply();
         var store = new QuotaSnapshotStore();
+        _store = store;
         var codexHttp = QuotaHttpClient.Create();
         var geminiHttp = QuotaHttpClient.Create();
         var claudeHttp = QuotaHttpClient.Create();
@@ -86,6 +91,8 @@ public partial class App : System.Windows.Application
         _syncService.SnapshotUpdated += OnSnapshotUpdated;
         _tokenHistoryService.SnapshotUpdated += OnTokenHistoryUpdated;
         try { await _notificationPolicy.InitializeAsync(); }
+        catch (Exception) { }
+        try { await _resetPolicy.InitializeAsync(); }
         catch (Exception) { }
         InitializeTrayIcon();
         if (_appBarMenuItem is not null) _appBarMenuItem.Checked = true;
@@ -206,6 +213,47 @@ public partial class App : System.Windows.Application
         };
         menu.Items.Add(notificationItem);
 
+        var resetItem = new Forms.ToolStripMenuItem("Sıfırlanma bildirimleri")
+        {
+            CheckOnClick = true,
+            Checked = _resetPolicy.Enabled
+        };
+        var changingResetItem = false;
+        resetItem.CheckedChanged += async (_, _) =>
+        {
+            if (changingResetItem) return;
+            var requestedValue = resetItem.Checked;
+            try { await _resetPolicy.SetEnabledAsync(requestedValue); }
+            catch (Exception)
+            {
+                changingResetItem = true;
+                resetItem.Checked = !requestedValue;
+                changingResetItem = false;
+                MessageBox.Show("Sıfırlanma bildirimi tercihi kaydedilemedi.", "Kullanım Monitörü",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        };
+        menu.Items.Add(resetItem);
+
+        var themeMenu = new Forms.ToolStripMenuItem("Tema");
+        var themeItems = new Dictionary<AppThemeMode, Forms.ToolStripMenuItem>();
+        foreach (var (mode, caption) in new[] { (AppThemeMode.System, "Sistemi izle"), (AppThemeMode.Dark, "Koyu"), (AppThemeMode.Light, "Açık") })
+        {
+            var item = new Forms.ToolStripMenuItem(caption) { Checked = Theme.Mode == mode };
+            item.Click += (_, _) =>
+            {
+                Theme.SetMode(mode);
+                foreach (var (other, otherItem) in themeItems) otherItem.Checked = other == mode;
+            };
+            themeItems[mode] = item;
+            themeMenu.DropDownItems.Add(item);
+        }
+        menu.Items.Add(themeMenu);
+
+        var exportItem = new Forms.ToolStripMenuItem("Geçmişi CSV olarak dışa aktar…");
+        exportItem.Click += async (_, _) => await ExportCsvAsync();
+        menu.Items.Add(exportItem);
+
         menu.Items.Add(new Forms.ToolStripSeparator());
         _appBarMenuItem = new Forms.ToolStripMenuItem("Görev çubuğunda kullanım göstergesi") { CheckOnClick = true };
         _appBarMenuItem.CheckedChanged += (_, _) => ToggleAppBar(_appBarMenuItem.Checked);
@@ -250,6 +298,15 @@ public partial class App : System.Windows.Application
         if (_popup is null)
         {
             _popup = new MainWindow(_syncService, _tokenHistoryService);
+            _popup.ProviderActionRequested += action =>
+            {
+                if (action == "claude-login" && !ClaudeSessionHelper.TryStartLogin(out var loginError))
+                    MessageBox.Show(loginError, "Kullanım Monitörü", MessageBoxButton.OK, MessageBoxImage.Warning);
+            };
+            _popup.AppLaunchRequested += target =>
+            {
+                if (!ProviderAppLauncher.TryLaunch(target, out var error)) _popup.ShowLaunchError(target, error);
+            };
             if (_latestSnapshot is not null) _popup.SetSnapshot(_latestSnapshot, isCached: true);
             if (_latestTokenSnapshot is not null) _popup.SetTokenHistorySnapshot(_latestTokenSnapshot);
             _popup.IsVisibleChanged += (_, _) =>
@@ -295,6 +352,56 @@ public partial class App : System.Windows.Application
             _appBar?.SetSnapshot(snapshot);
         });
         _ = ShowLowQuotaNotificationsAsync(snapshot);
+        _ = ShowResetNotificationsAsync(snapshot);
+    }
+
+    private async Task ShowResetNotificationsAsync(UsageSnapshot snapshot)
+    {
+        try
+        {
+            var notices = await _resetPolicy.GetNewNoticesAsync(snapshot);
+            if (notices.Count == 0) return;
+            var lines = notices.Take(3)
+                .Select(notice => $"{notice.Provider} · {notice.Window} kotan sıfırlandı (%{notice.PreviousUsedPercent} → %{notice.CurrentUsedPercent} kullanım)")
+                .ToList();
+            if (notices.Count > lines.Count) lines.Add($"+{notices.Count - lines.Count} pencere daha");
+            var message = string.Join(Environment.NewLine, lines);
+            await Dispatcher.InvokeAsync(() =>
+                _trayIcon?.ShowBalloonTip(7000, "Kota sıfırlandı", message, Forms.ToolTipIcon.Info));
+        }
+        catch (Exception) { /* A notification failure must not affect quota polling. */ }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_store is null) return;
+        try
+        {
+            using var dialog = new Forms.SaveFileDialog
+            {
+                Title = "Kullanım geçmişini dışa aktar",
+                Filter = "CSV dosyası (*.csv)|*.csv",
+                FileName = $"kullanim-gecmisi-{DateTime.Now:yyyy-MM-dd}.csv",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                OverwritePrompt = true
+            };
+            if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
+
+            var records = await _store.ReadAllHistoryAsync();
+            var quotaRows = await CsvExporter.WriteQuotaAsync(dialog.FileName, records);
+            var tokenRows = 0;
+            var tokenPath = Path.Combine(Path.GetDirectoryName(dialog.FileName)!,
+                Path.GetFileNameWithoutExtension(dialog.FileName) + "-token.csv");
+            if (_latestTokenSnapshot is { Rows.Count: > 0 } tokens)
+                tokenRows = await CsvExporter.WriteTokensAsync(tokenPath, tokens.Rows);
+            var summary = $"{quotaRows} kota satırı: {Path.GetFileName(dialog.FileName)}"
+                + (tokenRows > 0 ? $"\n{tokenRows} token satırı: {Path.GetFileName(tokenPath)}" : "\nToken geçmişi kapalı veya boş olduğu için token dosyası yazılmadı.");
+            _trayIcon?.ShowBalloonTip(6000, "CSV dışa aktarıldı", summary, Forms.ToolTipIcon.Info);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show("CSV dosyası yazılamadı: " + ex.Message, "Kullanım Monitörü", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async Task ShowLowQuotaNotificationsAsync(UsageSnapshot snapshot)

@@ -1,4 +1,4 @@
-﻿# Süper Zeka Kullanımı · AI Usage Bar
+# Süper Zeka Kullanımı · AI Usage Bar
 
 **Codex, Gemini ve Claude kotanı tek bakışta gör. Akışını bölmeden çalışmaya devam et.**
 
@@ -64,3 +64,15 @@ Paket `artifacts/` altında üretilir. Doğrulama ayrıntıları [Windows test r
 Bağımsız bir projedir; OpenAI, Google veya Anthropic tarafından üretilmez ya da onaylanmaz. Marka ve logolar ilgili sahiplerine aittir. Kota yolları sağlayıcıların kararlı herkese açık API sözleşmeleri değildir; değişebilir veya erişim reddedilebilir.
 
 Otomatik başlangıç tercihi Windows Görev Zamanlayıcısı ile kullanıcı oturumuna bağlıdır. Etkinleştirildiğinde küçük UsageMonitorSupervisor başlatıcısı uygulamanın kapanmasını bekler; beklenmedik/nonzero kapanmada1dk sonra yeniden açar. Tepsi menüsünden Çıkış normal0koduyla kapanır; başlatıcı da sona erer, o oturumda yeniden açmaz. Açılış kaydı10sn gecikmeli, pilde açık ve süre sınırı yoktur. Bu güncelleme henüz GitHub sürüm paketine yayımlanmamıştır.
+
+## Uygulama kısayolları
+
+Açılır pencerede marka logosu ve adı ayrı kısayollardır. Fareyle tıklayabilir veya Tab ile seçip Enter/Boşluk tuşuyla açabilirsiniz.
+
+| Kart | Logoya tıklayınca | İsme tıklayınca |
+| --- | --- | --- |
+| Codex | ChatGPT | Codex |
+| Gemini | Gemini | Antigravity |
+| Claude | Claude | Claude |
+
+Kurulu Windows uygulamaları kullanılır. Uygulama bulunamaz veya başlatılamazsa ilgili kartta kısa bir açıklama gösterilir; kota verileri korunur.

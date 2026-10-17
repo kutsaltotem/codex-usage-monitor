@@ -17,13 +17,26 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
 
     public string Id => "claude";
 
-    public async Task<ProviderSnapshot> FetchAsync(CancellationToken cancellationToken)
+    public Task<ProviderSnapshot> FetchAsync(CancellationToken cancellationToken) => FetchAsync(cancellationToken, retriedAfterRefresh: false);
+
+    private static bool IsExpired(LocalCredential credential) =>
+        credential.ExpiresAt is { } expiry && expiry <= DateTimeOffset.UtcNow.AddSeconds(30);
+
+    private async Task<ProviderSnapshot> FetchAsync(CancellationToken cancellationToken, bool retriedAfterRefresh)
     {
         var credential = LocalCredentialReader.ReadClaude();
         if (credential is null)
             return Empty("not_signed_in", "Claude Code abonelik oturumu bulunamadı. Claude Code'da claude.ai hesabınızla giriş yapın.");
-        if (credential.ExpiresAt is { } expiry && expiry <= DateTimeOffset.UtcNow.AddSeconds(30))
-            return Empty("reauth_required", "Claude Code oturumu süresi dolmuş. Claude Code'u açıp tekrar giriş yapın.");
+        if (IsExpired(credential))
+        {
+            // Claude Code renews its own token; we only re-read the file afterwards.
+            await ClaudeSessionHelper.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
+            credential = LocalCredentialReader.ReadClaude();
+            if (credential is null)
+                return Empty("not_signed_in", "Claude Code abonelik oturumu bulunamadı. Claude Code'da claude.ai hesabınızla giriş yapın.");
+            if (IsExpired(credential))
+                return Empty("reauth_required", "Claude Code oturumu süresi dolmuş ve kendiliğinden yenilenemedi. Panelden Claude Code girişini yenileyin.");
+        }
 
         try
         {
@@ -42,7 +55,11 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
                 && !string.Equals(responseUri.Host, "api.anthropic.com", StringComparison.OrdinalIgnoreCase))
                 return Empty("redirect_blocked", "Claude kota isteği beklenmeyen bir adrese yönlendirildi.");
             if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                if (!retriedAfterRefresh && await ClaudeSessionHelper.TryRefreshAsync(cancellationToken).ConfigureAwait(false))
+                    return await FetchAsync(cancellationToken, retriedAfterRefresh: true).ConfigureAwait(false);
                 return Empty("reauth_required", "Claude oturumu kabul edilmedi. Claude Code'da tekrar giriş yapın.");
+            }
             if (response.StatusCode == HttpStatusCode.Forbidden)
                 return Empty("forbidden", "Claude kota servisi isteği reddetti (HTTP 403). Oturum erişimi veya kota bağlantısı değişmiş olabilir.");
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -53,6 +70,7 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
             await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
             var windows = MapWindows(document.RootElement);
+            var breakdown = MapBreakdown(document.RootElement);
             if (windows.Count == 0)
                 return Empty("schema_changed", "Claude kota yanıtında tanınan kullanım penceresi bulunamadı.");
 
@@ -62,12 +80,13 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
                 Id,
                 "Claude",
                 hasPrimaryWindows ? "ok" : "partial",
-                null,
+                credential.Plan,
                 DateTimeOffset.UtcNow,
                 "Claude Code OAuth → Anthropic usage endpoint",
                 windows,
                 hasPrimaryWindows ? null : "quota_partial",
-                hasPrimaryWindows ? null : "5 saatlik veya haftalık ana pencere yanıt içinde yok.");
+                hasPrimaryWindows ? null : "5 saatlik veya haftalık ana pencere yanıt içinde yok.",
+                breakdown);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -109,7 +128,31 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
             AddWindow(windows, property.Value, $"weekly_{suffix}", $"Haftalık · {model}");
         }
 
+        if (root.TryGetProperty("extra_usage", out var extra)
+            && extra.ValueKind == JsonValueKind.Object
+            && extra.TryGetProperty("is_enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True)
+            AddWindow(windows, extra, "extra_usage", "Ek kullanım");
+
         return windows;
+    }
+
+    private static IReadOnlyList<UsageBreakdownRow>? MapBreakdown(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("seven_day_breakdown", out var breakdown) || breakdown.ValueKind != JsonValueKind.Object
+            || !breakdown.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array)
+            return null;
+        var result = new List<UsageBreakdownRow>();
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (!TryReadNumber(row, "percent", out var percent) || !double.IsFinite(percent)) continue;
+            var key = row.TryGetProperty("key", out var keyValue) && keyValue.ValueKind == JsonValueKind.String ? keyValue.GetString() : null;
+            var name = row.TryGetProperty("display_name", out var nameValue) && nameValue.ValueKind == JsonValueKind.String ? nameValue.GetString() : key;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var label = key switch { "chat" => "Sohbet", "other" => "Diğer", _ => name };
+            result.Add(new UsageBreakdownRow(label, Math.Clamp(percent, 0, 100)));
+        }
+        return result.Count == 0 ? null : result;
     }
 
     private static void AddWindow(List<UsageWindow> windows, JsonElement value, string kind, string label)

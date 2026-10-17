@@ -62,6 +62,21 @@ public sealed class QuotaSnapshotStore
         return rows.Values.OrderBy(row => row.GeneratedAt).ToArray();
     }
 
+    /// <summary>Every retained history record (up to 365 days), oldest first, for CSV export.</summary>
+    public async Task<IReadOnlyList<QuotaHistoryRecord>> ReadAllHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        var records = new List<QuotaHistoryRecord>();
+        try
+        {
+            await using var stream = new FileStream(_historyPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 16384, true);
+            await foreach (var record in JsonSerializer.DeserializeAsyncEnumerable<QuotaHistoryRecord>(stream,
+                topLevelValues: true, options: _json, cancellationToken: cancellationToken))
+                if (record is { Windows: not null }) records.Add(record);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        return records;
+    }
+
     public async Task SaveAsync(UsageSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_snapshotPath)!);
@@ -154,3 +169,6 @@ public sealed class QuotaSnapshotStore
 }
 
 public sealed record QuotaHistoryEntry(DateTimeOffset GeneratedAt, string Id, IReadOnlyList<UsageWindow> Windows);
+
+public sealed record QuotaHistoryRecord(
+    DateTimeOffset GeneratedAt, string Id, string? Name, string? Plan, string? Source, IReadOnlyList<UsageWindow> Windows);

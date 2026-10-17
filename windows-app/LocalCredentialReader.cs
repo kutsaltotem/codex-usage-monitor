@@ -141,13 +141,30 @@ public static class LocalCredentialReader
                 null,
                 ReadExpiry(oauth, "expiresAt"),
                 "claude-code-credentials",
-                path);
+                path,
+                Plan: ClaudePlanLabel(ReadString(oauth, "subscriptionType"), ReadString(oauth, "rateLimitTier")));
         }
         catch (FileNotFoundException) { return null; }
         catch (DirectoryNotFoundException) { return null; }
         catch (JsonException) { return null; }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
+    }
+
+    public static string? ClaudePlanLabel(string? subscription, string? tier)
+    {
+        if (string.IsNullOrWhiteSpace(subscription)) return null;
+        var kind = subscription.Trim().ToLowerInvariant();
+        var multiplier = tier is null ? null : System.Text.RegularExpressions.Regex.Match(tier, @"(\d+)x", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m ? m.Groups[1].Value + "x" : null;
+        return kind switch
+        {
+            "max" => multiplier is null ? "Max" : "Max " + multiplier,
+            "pro" => "Pro",
+            "team" => "Team",
+            "enterprise" => "Enterprise",
+            "free" => "Free",
+            _ => char.ToUpperInvariant(kind[0]) + kind[1..]
+        };
     }
 
     private static LocalCredential? ParseGeminiCredential(string? raw, string source, string? path = null)

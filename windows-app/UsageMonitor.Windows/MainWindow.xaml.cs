@@ -19,6 +19,9 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _ageClock = new() { Interval = TimeSpan.FromMinutes(1) };
 
     public bool AllowClose { get; set; }
+    public event Action<ProviderAppTarget>? AppLaunchRequested;
+    public event Action<string>? ProviderActionRequested;
+    private readonly Dictionary<ProviderAppTarget, TextBlock> _launchErrors = new();
 
     public MainWindow(UsageSyncService syncService, TokenHistoryService tokenHistoryService, bool previewOnly = false)
     {
@@ -60,10 +63,21 @@ public partial class MainWindow : Window
         };
         IsVisibleChanged += (_, _) =>
         {
-            if (!IsVisible) { _ageClock.Stop(); _ageLabels.Clear(); ProviderList.Children.Clear(); TokenHistoryContent.Children.Clear(); TokenSummaryHost.Children.Clear(); }
+            if (!IsVisible) { _launchErrors.Clear(); _ageClock.Stop(); _ageLabels.Clear(); ProviderList.Children.Clear(); TokenHistoryContent.Children.Clear(); TokenSummaryHost.Children.Clear(); }
             else _ageClock.Start();
         };
         SetLoadingMessage("Henüz kota verisi yok.");
+        Theme.Changed += RepaintForTheme;
+        Unloaded += (_, _) => Theme.Changed -= RepaintForTheme;
+    }
+
+    private void RepaintForTheme()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.InvokeAsync(RepaintForTheme); return; }
+        if (TokenPanel.Visibility == Visibility.Visible) ShowTokenTab();
+        else ShowQuotaTab();
+        if (_snapshot is null) ProviderList.Children.Clear();
+        if (_snapshot is null) ProviderList.Children.Add(CreateEmptyState("İlk eşitleme tamamlanınca kota pencereleri burada görünecek."));
     }
 
     public void ShowAttached(System.Drawing.Rectangle anchor)
@@ -139,6 +153,7 @@ public partial class MainWindow : Window
 
         if (!IsVisible) return;
         ProviderList.Children.Clear();
+        _launchErrors.Clear();
         _ageLabels.Clear();
         foreach (var provider in snapshot.Providers.OrderBy(ProviderOrder))
             ProviderList.Children.Add(CreateProviderCard(provider));
@@ -217,18 +232,29 @@ public partial class MainWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.Children.Add(CreateLogo(provider.Id, 14));
+        var logoTarget = provider.Id switch {
+            "chatgpt-codex" => ProviderAppTarget.ChatGPT,
+            "gemini" => ProviderAppTarget.Gemini,
+            _ => ProviderAppTarget.Claude
+        };
+        var nameTarget = provider.Id switch {
+            "chatgpt-codex" => ProviderAppTarget.Codex,
+            "gemini" => ProviderAppTarget.Antigravity,
+            _ => ProviderAppTarget.Claude
+        };
+        header.Children.Add(CreateAppLink(CreateLogo(provider.Id, 14), logoTarget, "Logo"));
         var name = new TextBlock
         {
-            Text = provider.Id == "gemini" ? "Gemini" : provider.Id == "chatgpt-codex" ? "Codex" : provider.Name,
+            Text = provider.Id == "gemini" ? "Gemini" : provider.Id == "chatgpt-codex" ? "Codex" : provider.Id == "claude" ? "Claude" : provider.Name,
             Foreground = Brush("#EDF1F6"),
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(9, 0, 0, 0)
+            Margin = new Thickness(2, 0, 0, 0)
         };
         var brand = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        brand.Children.Add(name);
+        brand.Children.Add(CreateAppLink(name, nameTarget, "Name"));
+        if (CreatePlanBadge(provider) is { } planBadge) brand.Children.Add(planBadge);
         if (provider.State != "ok") brand.Children.Add(CreateProviderWarning(provider));
         Grid.SetColumn(brand, 1);
         header.Children.Add(brand);
@@ -236,6 +262,11 @@ public partial class MainWindow : Window
         Grid.SetColumn(badge, 2);
         header.Children.Add(badge);
         layout.Children.Add(header);
+        var launchError = new TextBlock { Visibility = Visibility.Collapsed, Foreground = Brush("#F0B56B"),
+            FontSize = 10, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,6), Tag = "AppLaunchError" };
+        layout.Children.Add(launchError);
+        _launchErrors[logoTarget] = launchError;
+        _launchErrors[nameTarget] = launchError;
 
         if (provider.Windows.Count == 0)
         {
@@ -272,6 +303,7 @@ public partial class MainWindow : Window
             }
             layout.Children.Add(windowsPanel);
         }
+        if (CreateBreakdown(provider) is { } breakdown) layout.Children.Add(breakdown);
 
         var source = new TextBlock
         {
@@ -288,6 +320,29 @@ public partial class MainWindow : Window
         return card;
     }
 
+    private Button CreateAppLink(UIElement content, ProviderAppTarget target, string role)
+    {
+        var title = target == ProviderAppTarget.ChatGPT ? "ChatGPT" : target.ToString();
+        var button = new Button { Content = content, Style = (Style)FindResource("ProviderAppLink"),
+            ToolTip = title + " uygulamasını aç", Tag = target };
+        System.Windows.Automation.AutomationProperties.SetName(button, title + " uygulamasını aç");
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, $"Launch.{role}.{target}");
+        button.Click += (_, args) =>
+        {
+            args.Handled = true;
+            foreach (var error in _launchErrors.Values.Distinct()) error.Visibility = Visibility.Collapsed;
+            if (_previewOnly) return;
+            AppLaunchRequested?.Invoke(target);
+        };
+        return button;
+    }
+
+    internal void ShowLaunchError(ProviderAppTarget target, string message)
+    {
+        if (!_launchErrors.TryGetValue(target, out var error)) return;
+        error.Text = message;
+        error.Visibility = Visibility.Visible;
+    }
     private UIElement CreateProviderWarning(ProviderSnapshot provider)
     {
         var details = ProviderWarningDetails(provider);
@@ -300,14 +355,15 @@ public partial class MainWindow : Window
             Tag = "ProviderWarning"
         };
         ToolTipService.SetInitialShowDelay(button, 100);
-        var popup = new Popup
+        Popup? popup = null;
+        popup = new Popup
         {
             PlacementTarget = button, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true,
             Child = new Border
             {
                 Background = Brush("#202731"), BorderBrush = Brush("#465363"), BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(9), Padding = new Thickness(10), MaxWidth = 280,
-                Child = new TextBlock { Text = details, Foreground = Brush("#E5EBF2"), FontSize = 10, TextWrapping = TextWrapping.Wrap }
+                Child = BuildWarningContent(provider, details, () => popup!.IsOpen = false)
             }
         };
         button.Click += (_,_) => popup.IsOpen = !popup.IsOpen;
@@ -315,12 +371,76 @@ public partial class MainWindow : Window
         return button;
     }
 
+    private UIElement BuildWarningContent(ProviderSnapshot provider, string details, Action close)
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock { Text = details, Foreground = Brush("#E5EBF2"), FontSize = 10, TextWrapping = TextWrapping.Wrap });
+        var signInNeeded = provider.State is "not_signed_in" or "reauth_required" or "stale" or "forbidden";
+        string? label = null;
+        Action? action = null;
+        if (provider.Id == "claude" && signInNeeded)
+        {
+            label = "Claude Code girişini aç";
+            action = () => ProviderActionRequested?.Invoke("claude-login");
+        }
+        else if (provider.Id == "gemini" && signInNeeded)
+        {
+            label = "Antigravity'yi aç";
+            action = () => AppLaunchRequested?.Invoke(ProviderAppTarget.Antigravity);
+        }
+        if (label is not null && action is not null && !_previewOnly)
+        {
+            var button = new Button { Content = label, Margin = new Thickness(0, 9, 0, 0), HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+                Style = (Style)Application.Current.FindResource("ActionButton"), FontSize = 11, Padding = new Thickness(10, 6, 10, 6) };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(button, "ProviderWarning.Action." + provider.Id);
+            button.Click += (_, _) => { close(); action(); };
+            stack.Children.Add(button);
+        }
+        return stack;
+    }
+
+    private static UIElement? CreatePlanBadge(ProviderSnapshot provider)
+    {
+        var plan = FormatPlan(provider.Plan);
+        if (plan is null) return null;
+        return new Border
+        {
+            Background = Brush("#1E3A5A"), BorderBrush = Brush("#34567C"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = $"{provider.Name} planı: {plan}",
+            Tag = "PlanBadge",
+            Child = new TextBlock { Text = plan, Foreground = Brush("#9CC4F2"), FontSize = 9, FontWeight = FontWeights.SemiBold }
+        };
+    }
+
+    internal static string? FormatPlan(string? plan)
+    {
+        if (string.IsNullOrWhiteSpace(plan)) return null;
+        var trimmed = plan.Trim();
+        return char.ToUpperInvariant(trimmed[0]) + trimmed[1..];
+    }
+
+    private static UIElement? CreateBreakdown(ProviderSnapshot provider)
+    {
+        if (provider.Breakdown is not { Count: > 0 } rows) return null;
+        var parts = rows.Where(row => row.Percent >= 1).OrderByDescending(row => row.Percent)
+            .Select(row => $"{row.Label} %{Math.Round(row.Percent):0}").ToList();
+        var text = parts.Count == 0 ? "Haftalık kullanım dağılımı: henüz yok" : "Haftalık dağılım: " + string.Join(" · ", parts);
+        return new TextBlock
+        {
+            Text = text, Foreground = Brush("#8592A1"), FontSize = 9, Margin = new Thickness(1, 7, 1, 0),
+            TextWrapping = TextWrapping.Wrap, Tag = "UsageBreakdown",
+            ToolTip = "Haftalık kullanımın hangi Claude yüzeyinden geldiği (Claude Code, sohbet, Cowork)."
+        };
+    }
+
     public static string ProviderWarningDetails(ProviderSnapshot provider)
     {
         var action = provider.State switch
         {
             "not_signed_in" or "reauth_required" => provider.Id == "claude"
-                ? "Claude Desktop girişi bu bağlantı için yeterli olmayabilir. Claude Code abonelik oturumu gerekir; ücretsiz hesabın kotası bu bağlantıyla okunamayabilir."
+                ? "Claude kotası için Claude Code abonelik oturumu gerekir (Claude Desktop girişi yetmez). Aşağıdaki düğme girişi başlatır; tarayıcıda onayladıktan sonra kota kendiliğinden gelir."
                 : "Sağlayıcı uygulamasında girişini kontrol et; ardından yenile.",
             "forbidden" => "Hesabın planını ve kota erişimini kontrol et. Servis erişim izni vermedi.",
             "rate_limited" => "İstek sınırı nedeniyle bekle; sonraki otomatik ölçüm yeniden dener.",
@@ -393,7 +513,7 @@ public partial class MainWindow : Window
         };
         var fill = new Border
         {
-            Background = Brush(remainingValue is null ? "#657180" : remaining <= 10 ? "#EC777A" : remaining <= 30 ? "#E8B75F" : accent),
+            Background = Accent(remainingValue is null ? "#657180" : remaining <= 10 ? "#EC777A" : remaining <= 30 ? "#E8B75F" : accent),
             CornerRadius = new CornerRadius(3),
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Width = double.NaN
@@ -465,7 +585,7 @@ public partial class MainWindow : Window
         return panel;
     }
 
-    private static System.Windows.Controls.Image CreateLogo(string providerId, double size) => BrandMarks.Create(providerId, size);
+    private static System.Windows.Controls.Image CreateLogo(string providerId, double size) => BrandMarks.CreateThemed(providerId, size);
 
     private static int ProviderOrder(ProviderSnapshot provider) => provider.Id switch
     {
@@ -528,13 +648,6 @@ public partial class MainWindow : Window
         _ => "Kota verisi şu anda alınamadı. Biraz sonra yeniden deneyin."
     };
 
-    private static readonly Dictionary<string, SolidColorBrush> BrushCache = new();
-    private static SolidColorBrush Brush(string color)
-    {
-        if (BrushCache.TryGetValue(color, out var cached)) return cached;
-        var brush = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color));
-        brush.Freeze();
-        BrushCache[color] = brush;
-        return brush;
-    }
+    private static SolidColorBrush Brush(string color) => Theme.Brush(color);
+    private static SolidColorBrush Accent(string color) => Theme.Accent(color);
 }

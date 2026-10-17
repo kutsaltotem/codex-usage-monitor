@@ -1,4 +1,14 @@
-﻿# Değişiklikler
+# Değişiklikler
+
+## 0.3.0 — 17 Ekim 2026
+
+- Claude: süresi dolan Claude Code oturumu `claude auth status` ile Claude Code'a yenilettirilir (eklenti kimlik dosyasını yazmaz); 401 yanıtında bir kez daha denenir.
+- Claude: plan rozeti (Pro / Max 5x…), ek kullanım penceresi ve haftalık dağılım satırı (Claude Code / Sohbet / Cowork).
+- Panelde uyarı penceresinde "Claude Code girişini aç" ve "Antigravity'yi aç" düğmeleri; açıklayıcı oturum iletileri.
+- Plan rozeti tüm sağlayıcı kartlarında (ör. Codex Plus).
+- Açık tema: Sistemi izle / Koyu / Açık (tepsi menüsü → Tema). Görev çubuğu kapsülleri değişmez.
+- Sıfırlanma bildirimi: en az %50 kullanılmış bir pencere sıfırlanınca tepsi bildirimi (tepsi menüsünden kapatılabilir).
+- Tepsi menüsü → "Geçmişi CSV olarak dışa aktar…": kota geçmişi ve (açıksa) token sayaçları, Excel uyumlu UTF-8.
 
 ## 0.2.0 — 6 Ekim 2026 · İlk herkese açık önizleme
 

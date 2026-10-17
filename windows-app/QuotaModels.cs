@@ -18,7 +18,10 @@ public sealed record ProviderSnapshot(
     string Source,
     IReadOnlyList<UsageWindow> Windows,
     string? ErrorCode = null,
-    string? Message = null);
+    string? Message = null,
+    IReadOnlyList<UsageBreakdownRow>? Breakdown = null);
+
+public sealed record UsageBreakdownRow(string Label, double Percent);
 
 public sealed record UsageSnapshot(
     DateTimeOffset GeneratedAt,
@@ -32,7 +35,8 @@ public sealed record LocalCredential(
     DateTimeOffset? ExpiresAt,
     string Source,
     string? FilePath = null,
-    bool ApiKeyOnly = false);
+    bool ApiKeyOnly = false,
+    string? Plan = null);
 
 public interface IQuotaConnector
 {
