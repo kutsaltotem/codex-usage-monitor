@@ -38,13 +38,12 @@ var claude = await new ClaudeQuotaConnector(claudeHttp).FetchAsync(CancellationT
 if (claude.State != "ok" || claude.Plan != "Max 5x") throw new Exception($"Claude plan/state failed: {claude.State} {claude.Plan}");
 if (claude.Windows.Count != 3 || claude.Windows[0].Kind != "five_hour" || claude.Windows[2].Kind != "extra_usage")
     throw new Exception("Claude windows (5h, weekly, extra usage) failed.");
-if (claude.Breakdown is not { Count: 3 } rows || rows[1].Label != "Sohbet" || rows[0].Percent != 92) throw new Exception("Claude weekly breakdown failed.");
 if (LocalCredentialReader.ClaudePlanLabel("pro", "default_claude_ai") != "Pro" || LocalCredentialReader.ClaudePlanLabel(null, null) is not null)
     throw new Exception("Claude plan label failed.");
 File.Delete(Path.Combine(claudeHome, ".credentials.json"));
 var signedOut = await new ClaudeQuotaConnector(claudeHttp).FetchAsync(CancellationToken.None);
 if (signedOut.State != "not_signed_in") throw new Exception("Claude signed-out state failed.");
-Console.WriteLine("Claude connector: plan, windows, extra usage, weekly breakdown, signed-out passed.");
+Console.WriteLine("Claude connector: plan, windows, extra usage, signed-out passed.");
 
 sealed class FakeHandler(string body) : HttpMessageHandler
 {

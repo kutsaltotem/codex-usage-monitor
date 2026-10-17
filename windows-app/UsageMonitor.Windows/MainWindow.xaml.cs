@@ -168,6 +168,7 @@ public partial class MainWindow : Window
             ProviderList.Children.Add(CreateProviderCard(provider));
         if (ProviderList.Children.OfType<Border>().LastOrDefault() is { } last)
             last.Margin = new Thickness(0);
+        if (CreateOverallUsage(snapshot) is { } overall) ProviderList.Children.Add(overall);
     }
 
     public void SetLoadingMessage(string message)
@@ -312,7 +313,6 @@ public partial class MainWindow : Window
             }
             layout.Children.Add(windowsPanel);
         }
-        if (CreateBreakdown(provider) is { } breakdown) layout.Children.Add(breakdown);
 
         var source = new TextBlock
         {
@@ -430,17 +430,32 @@ public partial class MainWindow : Window
         return char.ToUpperInvariant(trimmed[0]) + trimmed[1..];
     }
 
-    private static UIElement? CreateBreakdown(ProviderSnapshot provider)
+    /// <summary>One provider-independent figure: weekly use of every connected subscription, no per-surface split.</summary>
+    private UIElement? CreateOverallUsage(UsageSnapshot snapshot)
     {
-        if (provider.Breakdown is not { Count: > 0 } rows) return null;
-        var parts = rows.Where(row => row.Percent >= 1).OrderByDescending(row => row.Percent)
-            .Select(row => $"{row.Label} %{Math.Round(row.Percent):0}").ToList();
-        var text = parts.Count == 0 ? "Haftalık kullanım dağılımı: henüz yok" : "Haftalık dağılım: " + string.Join(" · ", parts);
-        return new TextBlock
+        var rows = snapshot.Providers.OrderBy(ProviderOrder)
+            .Select(provider => (provider, window: provider.Windows.FirstOrDefault(w => w.Kind == "weekly")))
+            .Where(item => item.window is { UsedPercent: not null } && item.provider.State is "ok" or "partial" or "stale")
+            .Select(item => (Name: item.provider.Id == "chatgpt-codex" ? "Codex" : item.provider.Name, Used: Math.Clamp(item.window!.UsedPercent!.Value, 0, 100)))
+            .ToList();
+        if (rows.Count == 0) return null;
+        var average = rows.Average(row => row.Used);
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
         {
-            Text = text, Foreground = Brush("#8592A1"), FontSize = 9, Margin = new Thickness(1, 7, 1, 0),
-            TextWrapping = TextWrapping.Wrap, Tag = "UsageBreakdown",
-            ToolTip = "Haftalık kullanımın hangi Claude yüzeyinden geldiği (Claude Code, sohbet, Cowork)."
+            Text = $"Genel haftalık kullanım · %{Math.Round(average):0}", Foreground = Brush("#EDF1F6"), FontSize = 12, FontWeight = FontWeights.SemiBold
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = string.Join(" · ", rows.Select(row => $"{row.Name} %{Math.Round(row.Used):0}")),
+            Foreground = Brush("#8592A1"), FontSize = 10, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap
+        });
+        return new Border
+        {
+            Background = Brush("#141E2A"), BorderBrush = Brush("#26364A"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(11), Padding = new Thickness(10), Margin = new Thickness(0, 9, 0, 0), Tag = "OverallUsage",
+            ToolTip = "Bağlı aboneliklerin haftalık pencerelerindeki kullanım yüzdelerinin ortalaması.",
+            Child = panel
         };
     }
 

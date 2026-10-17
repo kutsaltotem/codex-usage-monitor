@@ -2,8 +2,9 @@
 
 ## 0.3.0 — 17 Ekim 2026
 
+- Panelin altında "Genel haftalık kullanım": bağlı tüm aboneliklerin haftalık yüzdeleri ve ortalaması (sohbet/iş ayrımı yok).
 - Claude: süresi dolan Claude Code oturumu `claude auth status` ile Claude Code'a yenilettirilir (eklenti kimlik dosyasını yazmaz); 401 yanıtında bir kez daha denenir.
-- Claude: plan rozeti (Pro / Max 5x…), ek kullanım penceresi ve haftalık dağılım satırı (Claude Code / Sohbet / Cowork).
+- Claude: plan rozeti (Pro / Max 5x…), ek kullanım penceresi.
 - Panelde uyarı penceresinde "Claude Code girişini aç" ve "Antigravity'yi aç" düğmeleri; açıklayıcı oturum iletileri.
 - Plan rozeti tüm sağlayıcı kartlarında (ör. Codex Plus).
 - Açık tema: varsayılan koyu; panel başlığındaki ☀/☾ simgesiyle ya da tepsi menüsü → Tema ile açılır.

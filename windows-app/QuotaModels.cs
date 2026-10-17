@@ -18,10 +18,7 @@ public sealed record ProviderSnapshot(
     string Source,
     IReadOnlyList<UsageWindow> Windows,
     string? ErrorCode = null,
-    string? Message = null,
-    IReadOnlyList<UsageBreakdownRow>? Breakdown = null);
-
-public sealed record UsageBreakdownRow(string Label, double Percent);
+    string? Message = null);
 
 public sealed record UsageSnapshot(
     DateTimeOffset GeneratedAt,

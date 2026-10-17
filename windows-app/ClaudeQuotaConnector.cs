@@ -70,7 +70,6 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
             await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
             var windows = MapWindows(document.RootElement);
-            var breakdown = MapBreakdown(document.RootElement);
             if (windows.Count == 0)
                 return Empty("schema_changed", "Claude kota yanıtında tanınan kullanım penceresi bulunamadı.");
 
@@ -85,8 +84,7 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
                 "Claude Code OAuth → Anthropic usage endpoint",
                 windows,
                 hasPrimaryWindows ? null : "quota_partial",
-                hasPrimaryWindows ? null : "5 saatlik veya haftalık ana pencere yanıt içinde yok.",
-                breakdown);
+                hasPrimaryWindows ? null : "5 saatlik veya haftalık ana pencere yanıt içinde yok.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -134,25 +132,6 @@ public sealed class ClaudeQuotaConnector(HttpClient http) : IQuotaConnector
             AddWindow(windows, extra, "extra_usage", "Ek kullanım");
 
         return windows;
-    }
-
-    private static IReadOnlyList<UsageBreakdownRow>? MapBreakdown(JsonElement root)
-    {
-        if (root.ValueKind != JsonValueKind.Object
-            || !root.TryGetProperty("seven_day_breakdown", out var breakdown) || breakdown.ValueKind != JsonValueKind.Object
-            || !breakdown.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array)
-            return null;
-        var result = new List<UsageBreakdownRow>();
-        foreach (var row in rows.EnumerateArray())
-        {
-            if (!TryReadNumber(row, "percent", out var percent) || !double.IsFinite(percent)) continue;
-            var key = row.TryGetProperty("key", out var keyValue) && keyValue.ValueKind == JsonValueKind.String ? keyValue.GetString() : null;
-            var name = row.TryGetProperty("display_name", out var nameValue) && nameValue.ValueKind == JsonValueKind.String ? nameValue.GetString() : key;
-            if (string.IsNullOrWhiteSpace(name)) continue;
-            var label = key switch { "chat" => "Sohbet", "other" => "Diğer", _ => name };
-            result.Add(new UsageBreakdownRow(label, Math.Clamp(percent, 0, 100)));
-        }
-        return result.Count == 0 ? null : result;
     }
 
     private static void AddWindow(List<UsageWindow> windows, JsonElement value, string kind, string label)
